@@ -97,15 +97,4 @@ describe('taskSchema', () => {
     // Assert
     expect(result.success).toBe(false);
   });
-
-  it('rejects an empty id', () => {
-    // Arrange
-    const task = buildTask({ id: '' });
-
-    // Act
-    const result = taskSchema.safeParse(task);
-
-    // Assert
-    expect(result.success).toBe(false);
-  });
 });

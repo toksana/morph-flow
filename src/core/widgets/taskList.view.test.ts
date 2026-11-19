@@ -8,7 +8,6 @@ import {
   completeDueDate,
   completionPercent,
   DEFAULT_PRIORITY,
-  ensureUniqueIds,
   sortByPriority,
   toTaskListView,
   type TaskView,
@@ -20,7 +19,7 @@ const PRIORITY_ORDER: TaskPriority[] = ['high', 'medium', 'low'];
 
 const buildTaskView = (overrides: Partial<TaskView> = {}): TaskView => {
   const { due, ...task } = buildTask();
-  return { ...task, ...(due ? { due } : {}), ...overrides };
+  return { id: faker.string.uuid(), ...task, ...(due ? { due } : {}), ...overrides };
 };
 
 describe('completionPercent', () => {
@@ -118,29 +117,6 @@ describe('sortByPriority', () => {
   });
 });
 
-describe('ensureUniqueIds', () => {
-  it('makes duplicated ids unique and keeps the first occurrence untouched', () => {
-    // Arrange
-    const id = faker.string.alphanumeric(4);
-    const tasks = [buildTaskView({ id }), buildTaskView({ id }), buildTaskView({ id })];
-
-    // Act
-    const ids = ensureUniqueIds(tasks).map((task) => task.id);
-
-    // Assert
-    expect(ids[0]).toBe(id);
-    expect(new Set(ids).size).toBe(tasks.length);
-  });
-
-  it('returns an empty array for no tasks', () => {
-    // Act
-    const result = ensureUniqueIds([]);
-
-    // Assert
-    expect(result).toEqual([]);
-  });
-});
-
 describe('toTaskListView', () => {
   it('returns an empty view for an object that has not started streaming', () => {
     // Act
@@ -193,7 +169,7 @@ describe('toTaskListView', () => {
   it('drops tasks whose title has not streamed yet', () => {
     // Arrange
     const title = faker.lorem.words(3);
-    const partial = { tasks: [undefined, {}, { id: 't2', title: '  ' }, { title }] };
+    const partial = { tasks: [undefined, {}, { title: '  ' }, { title }] };
 
     // Act
     const view = toTaskListView(partial);
@@ -202,16 +178,40 @@ describe('toTaskListView', () => {
     expect(view.tasks.map((task) => task.title)).toEqual([title]);
   });
 
-  it.each([[undefined], [''], ['   ']])('falls back to an index-based id for id=%j', (id) => {
+  it('keys every task by its streamed position, not by its sorted position', () => {
     // Arrange
-    const title = faker.lorem.words(3);
-    const partial = { tasks: [{ title: faker.lorem.words(2) }, { id, title }] };
+    const tasks = [
+      buildTask({ priority: 'low' }),
+      buildTask({ priority: 'high' }),
+      buildTask({ priority: 'medium' }),
+    ];
 
     // Act
-    const [, task] = toTaskListView(partial).tasks;
+    const view = toTaskListView(buildTaskList({ tasks }));
 
     // Assert
-    expect(task.id).toBe('task-1');
+    expect(view.tasks.map((task) => [task.id, task.title])).toEqual([
+      ['task-1', tasks[1].title],
+      ['task-2', tasks[2].title],
+      ['task-0', tasks[0].title],
+    ]);
+  });
+
+  it('keeps the ids of streamed tasks stable as more tasks arrive', () => {
+    // Arrange
+    const tasks = buildTaskList().tasks;
+    const titlesById = (count: number): Map<string, string> =>
+      new Map(
+        toTaskListView({ tasks: tasks.slice(0, count) }).tasks.map((task) => [task.id, task.title]),
+      );
+
+    // Act
+    const snapshots = tasks.map((_, index) => titlesById(index + 1));
+
+    // Assert
+    snapshots.slice(1).forEach((snapshot, index) => {
+      snapshots[index].forEach((title, id) => expect(snapshot.get(id)).toBe(title));
+    });
   });
 
   it('keeps a whitespace-padded title that has visible characters', () => {

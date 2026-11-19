@@ -2,6 +2,11 @@ import type { DeepPartial } from './deepPartial';
 import { type Task, type TaskList, type TaskPriority, taskSchema } from './taskList.schema';
 
 export interface TaskView {
+  /**
+   * Identity within one generation, derived from the task's position in the streamed array.
+   * Streamed JSON arrays only grow at the end, so a position never changes mid-stream.
+   * Persistent ids are assigned by code when tasks are saved, never by the model.
+   */
   id: string;
   title: string;
   done: boolean;
@@ -18,7 +23,7 @@ export interface TaskListView {
 }
 
 export const DEFAULT_PRIORITY: TaskPriority = 'medium';
-const FALLBACK_ID_PREFIX = 'task';
+const VIEW_ID_PREFIX = 'task';
 const PERCENT = 100;
 
 const PRIORITY_RANK: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
@@ -35,22 +40,12 @@ const toTaskView = (task: DeepPartial<Task> | undefined, index: number): TaskVie
   const title = nonBlank(task?.title);
   if (title === undefined) return null;
   return {
-    id: nonBlank(task?.id) ?? `${FALLBACK_ID_PREFIX}-${index}`,
+    id: `${VIEW_ID_PREFIX}-${index}`,
     title,
     done: task?.done ?? false,
     priority: task?.priority ?? DEFAULT_PRIORITY,
     due: completeDueDate(task?.due),
   };
-};
-
-/** The model may repeat ids; React keys must stay unique, so later duplicates get a suffix. */
-export const ensureUniqueIds = (tasks: TaskView[]): TaskView[] => {
-  const seen = new Set<string>();
-  return tasks.map((task, index) => {
-    const id = seen.has(task.id) ? `${task.id}-${index}` : task.id;
-    seen.add(id);
-    return id === task.id ? task : { ...task, id };
-  });
 };
 
 export const sortByPriority = (tasks: TaskView[]): TaskView[] =>
@@ -63,7 +58,7 @@ export const toTaskListView = (partial: DeepPartial<TaskList> | undefined): Task
   const visible = (partial?.tasks ?? [])
     .map(toTaskView)
     .filter((task): task is TaskView => task !== null);
-  const tasks = sortByPriority(ensureUniqueIds(visible));
+  const tasks = sortByPriority(visible);
   const doneCount = tasks.filter((task) => task.done).length;
 
   return {
