@@ -7,7 +7,7 @@ import {
   TASK_PRIORITIES,
   type Task,
   type TaskList,
-} from '@/lib/widgets/taskList.schema';
+} from '../../widgets/taskList.schema';
 
 const ISO_DATE_LENGTH = 'YYYY-MM-DD'.length;
 

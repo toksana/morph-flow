@@ -1,7 +1,7 @@
 import { faker } from '@faker-js/faker';
 import { describe, expect, it } from 'vitest';
 
-import { buildTask, buildTaskList, buildTasks } from '@/test/factories/taskList.factory';
+import { buildTask, buildTaskList, buildTasks } from '../test/factories/taskList.factory';
 
 import { MAX_TASKS, MIN_TASKS, taskListSchema, taskSchema } from './taskList.schema';
 
