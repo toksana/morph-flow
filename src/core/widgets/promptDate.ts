@@ -19,7 +19,7 @@ export const formatPromptDate = (now: Date, timeZone: string): string => {
   return `${weekday}, ${year}-${month}-${day}`;
 };
 
-/** True for IANA zones the runtime knows, e.g. "Europe/Moscow"; false for anything else. */
+/** True for IANA zones the runtime knows, e.g. "Europe/Berlin"; false for anything else. */
 export const isValidTimeZone = (timeZone: string): boolean => {
   try {
     new Intl.DateTimeFormat(PROMPT_DATE_LOCALE, { timeZone });
@@ -29,3 +29,6 @@ export const isValidTimeZone = (timeZone: string): boolean => {
     throw error;
   }
 };
+
+/** The runtime's IANA zone (the user's, when called on their device), e.g. "Europe/Berlin". */
+export const currentTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;

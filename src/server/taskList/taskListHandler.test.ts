@@ -10,7 +10,7 @@ import { createTaskListHandler } from './taskListHandler';
 
 const RANDOM_RUNS = 5;
 const ENDPOINT = 'http://localhost/api/task-list';
-const TIME_ZONE = 'Europe/Moscow';
+const TIME_ZONE = 'Europe/Berlin';
 
 const postJson = (body: string): Request =>
   new Request(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
@@ -46,13 +46,13 @@ describe('createTaskListHandler', () => {
   it("sends the trimmed prompt and a system prompt dated in the user's time zone", async () => {
     // Arrange
     const prompt = faker.lorem.sentence();
-    // Still Thursday in UTC, already Friday in Moscow: the server's day would be wrong.
+    // Still Thursday in UTC, already Friday in Tokyo: the server's day would be wrong.
     const lateThursdayUtc = new Date('2026-11-19T22:30:00Z');
     const model = mockStreamingModel([JSON.stringify(buildTaskList())]);
     const handler = createTaskListHandler({ model, now: () => lateThursdayUtc });
 
     // Act
-    const response = await handler(postPrompt(`  ${prompt}  `, 'Europe/Moscow'));
+    const response = await handler(postPrompt(`  ${prompt}  `, 'Asia/Tokyo'));
     await response.text();
 
     // Assert

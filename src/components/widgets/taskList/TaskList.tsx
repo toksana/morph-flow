@@ -8,20 +8,27 @@ import { TaskListItem } from './TaskListItem';
 
 export const DEFAULT_LOCALE = 'en-US';
 const EMPTY_LIST_TEXT = 'No tasks yet';
+const STREAMING_TEXT = 'Generating tasks…';
 const PROGRESS_LABEL = 'Completion';
 
 interface TaskListProps {
   view: TaskListView;
   locale?: string;
+  /** While true and empty, the card says it is generating instead of "No tasks yet". */
+  isStreaming?: boolean;
 }
 
 /** Counter and progress only make sense once at least one task has streamed in. */
-export const TaskList = ({ view, locale = DEFAULT_LOCALE }: TaskListProps): JSX.Element => {
+export const TaskList = ({
+  view,
+  locale = DEFAULT_LOCALE,
+  isStreaming = false,
+}: TaskListProps): JSX.Element => {
   const hasTasks = view.totalCount > 0;
   const hasTitle = view.title !== '';
 
   return (
-    <Card>
+    <Card aria-busy={isStreaming}>
       {(hasTitle || hasTasks) && (
         <CardHeader>
           {hasTitle && <CardTitle>{view.title}</CardTitle>}
@@ -43,7 +50,9 @@ export const TaskList = ({ view, locale = DEFAULT_LOCALE }: TaskListProps): JSX.
             </ul>
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">{EMPTY_LIST_TEXT}</p>
+          <p className="text-sm text-muted-foreground">
+            {isStreaming ? STREAMING_TEXT : EMPTY_LIST_TEXT}
+          </p>
         )}
       </CardContent>
     </Card>

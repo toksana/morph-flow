@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { MAX_PROMPT_LENGTH, taskListRequestSchema } from './taskList.request';
 
 const RANDOM_RUNS = 50;
-const TIME_ZONES = ['UTC', 'Europe/Moscow', 'America/New_York', 'Asia/Tokyo'];
+const TIME_ZONES = ['UTC', 'Europe/Berlin', 'America/New_York', 'Asia/Tokyo'];
 
 const buildRequest = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
   prompt: faker.lorem.sentence(),

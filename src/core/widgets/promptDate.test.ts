@@ -1,7 +1,7 @@
 import { faker } from '@faker-js/faker';
 import { describe, expect, it } from 'vitest';
 
-import { formatPromptDate, isValidTimeZone } from './promptDate';
+import { currentTimeZone, formatPromptDate, isValidTimeZone } from './promptDate';
 
 const RANDOM_RUNS = 100;
 const HOUR_MS = 60 * 60 * 1000;
@@ -42,7 +42,7 @@ describe('formatPromptDate', () => {
   });
 
   it.each([
-    ['Europe/Moscow', 'Friday, 2026-11-20'],
+    ['Asia/Tokyo', 'Friday, 2026-11-20'],
     ['Pacific/Kiritimati', 'Friday, 2026-11-20'],
     ['UTC', 'Thursday, 2026-11-19'],
     ['Etc/GMT+12', 'Thursday, 2026-11-19'],
@@ -59,7 +59,7 @@ describe('formatPromptDate', () => {
 });
 
 describe('isValidTimeZone', () => {
-  it.each(['UTC', 'Europe/Moscow', 'America/Los_Angeles', 'Asia/Kolkata', 'Etc/GMT+12'])(
+  it.each(['UTC', 'Europe/Berlin', 'America/Los_Angeles', 'Asia/Kolkata', 'Etc/GMT+12'])(
     'accepts %s',
     (timeZone) => {
       // Act
@@ -80,4 +80,14 @@ describe('isValidTimeZone', () => {
       expect(result).toBe(false);
     },
   );
+});
+
+describe('currentTimeZone', () => {
+  it('returns a zone the request schema accepts', () => {
+    // Act
+    const timeZone = currentTimeZone();
+
+    // Assert
+    expect(isValidTimeZone(timeZone)).toBe(true);
+  });
 });
