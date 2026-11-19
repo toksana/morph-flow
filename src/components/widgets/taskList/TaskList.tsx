@@ -15,25 +15,37 @@ interface TaskListProps {
   locale?: string;
 }
 
-export const TaskList = ({ view, locale = DEFAULT_LOCALE }: TaskListProps): JSX.Element => (
-  <Card>
-    <CardHeader>
-      <CardTitle>{view.title}</CardTitle>
-      <CardAction className="text-sm text-muted-foreground">
-        {view.doneCount}/{view.totalCount}
-      </CardAction>
-    </CardHeader>
-    <CardContent className="flex flex-col gap-3">
-      <Progress value={view.completionPercent} aria-label={PROGRESS_LABEL} />
-      {view.totalCount === 0 ? (
-        <p className="text-sm text-muted-foreground">{EMPTY_LIST_TEXT}</p>
-      ) : (
-        <ul className="divide-y">
-          {view.tasks.map((task) => (
-            <TaskListItem key={task.id} task={task} locale={locale} />
-          ))}
-        </ul>
+/** Counter and progress only make sense once at least one task has streamed in. */
+export const TaskList = ({ view, locale = DEFAULT_LOCALE }: TaskListProps): JSX.Element => {
+  const hasTasks = view.totalCount > 0;
+  const hasTitle = view.title !== '';
+
+  return (
+    <Card>
+      {(hasTitle || hasTasks) && (
+        <CardHeader>
+          {hasTitle && <CardTitle>{view.title}</CardTitle>}
+          {hasTasks && (
+            <CardAction className="text-sm text-muted-foreground">
+              {view.doneCount}/{view.totalCount}
+            </CardAction>
+          )}
+        </CardHeader>
       )}
-    </CardContent>
-  </Card>
-);
+      <CardContent className="flex flex-col gap-3">
+        {hasTasks ? (
+          <>
+            <Progress value={view.completionPercent} aria-label={PROGRESS_LABEL} />
+            <ul className="divide-y">
+              {view.tasks.map((task) => (
+                <TaskListItem key={task.id} task={task} locale={locale} />
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">{EMPTY_LIST_TEXT}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+};

@@ -60,6 +60,20 @@ describe('TaskList', () => {
     // Assert
     expect(screen.getByText('No tasks yet')).toBeInTheDocument();
     expect(screen.queryByRole('list')).toBeNull();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(screen.queryByText('0/0')).toBeNull();
+  });
+
+  it('shows the streamed title before any task has arrived', () => {
+    // Arrange
+    const title = faker.lorem.words(3);
+
+    // Act
+    render(<TaskList view={toTaskListView({ title })} />);
+
+    // Assert
+    expect(screen.getByText(title)).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).toBeNull();
   });
 
   it('renders the due date as a machine-readable, formatted time', () => {
