@@ -70,6 +70,7 @@ describe('toHabitStreakView', () => {
       goalPercent: 0,
       daysLeft: DEFAULT_TARGET_DAYS,
       goalReached: false,
+      hasProgress: false,
     });
   });
 
@@ -151,6 +152,18 @@ describe('toHabitStreakView', () => {
     // Assert
     expect(view.goalPercent).toBe(60);
     expect(view.daysLeft).toBe(12);
+  });
+
+  it.each([
+    [{ streakDays: 3 }, false],
+    [{ targetDays: 30 }, false],
+    [{ streakDays: 3, targetDays: 30 }, true],
+  ])('reports progress for %j as %s', (partial, expected) => {
+    // Act
+    const view = toHabitStreakView(partial);
+
+    // Assert
+    expect(view.hasProgress).toBe(expected);
   });
 
   it('hides a blank title and emoji that are still streaming', () => {

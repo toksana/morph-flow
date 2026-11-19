@@ -17,6 +17,8 @@ export interface HabitStreakView {
   goalPercent: number;
   daysLeft: number;
   goalReached: boolean;
+  /** Streak and target have both streamed; until then the counters would only show defaults. */
+  hasProgress: boolean;
 }
 
 /**
@@ -54,5 +56,6 @@ export const toHabitStreakView = (
     goalPercent: Math.min(FULL_PERCENT, completionPercent(streakDays, targetDays)),
     daysLeft: Math.max(0, targetDays - streakDays),
     goalReached: streakDays >= targetDays,
+    hasProgress: partial?.streakDays !== undefined && partial?.targetDays !== undefined,
   };
 };
