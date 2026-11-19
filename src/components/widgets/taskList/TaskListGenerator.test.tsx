@@ -1,5 +1,8 @@
 import { faker } from '@faker-js/faker';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act } from 'react';
+import { hydrateRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildTaskList, buildTasks } from '@/core/test/factories/taskList.factory';
@@ -177,5 +180,33 @@ describe('TaskListGenerator', () => {
     // Assert
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     stream.close();
+  });
+
+  it('keeps a prompt typed before hydration and lets the user submit it', async () => {
+    // Arrange
+    const prompt = faker.lorem.sentence();
+    const stream = controlledResponse();
+    const fetchMock = mockFetch(stream.response);
+    const container = document.createElement('div');
+    container.innerHTML = renderToString(<TaskListGenerator />);
+    document.body.append(container);
+    const field = container.querySelector('textarea') as HTMLTextAreaElement;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+    setValue?.call(field, prompt);
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+
+    // Act
+    await act(async () => {
+      hydrateRoot(container, <TaskListGenerator />);
+    });
+    fireEvent.click(within(container).getByRole('button', { name: 'Generate' }));
+
+    // Assert
+    expect(field.value).toBe(prompt);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({ prompt });
+    stream.close();
+    container.remove();
   });
 });
