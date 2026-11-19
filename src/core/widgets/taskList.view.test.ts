@@ -6,7 +6,6 @@ import { buildTask, buildTaskList, buildTasks } from '../test/factories/taskList
 import { MAX_TASKS, type TaskPriority } from './taskList.schema';
 import {
   completeDueDate,
-  completionPercent,
   DEFAULT_PRIORITY,
   sortByPriority,
   toTaskListView,
@@ -21,39 +20,6 @@ const buildTaskView = (overrides: Partial<TaskView> = {}): TaskView => {
   const { due, ...task } = buildTask();
   return { id: faker.string.uuid(), ...task, ...(due ? { due } : {}), ...overrides };
 };
-
-describe('completionPercent', () => {
-  it('stays within 0..100 for random counts', () => {
-    // Arrange
-    const pairs = Array.from({ length: RANDOM_RUNS }, () => {
-      const total = faker.number.int({ min: 0, max: MAX_TASKS });
-      return [faker.number.int({ min: 0, max: total }), total] as const;
-    });
-
-    // Act
-    const percents = pairs.map(([done, total]) => completionPercent(done, total));
-
-    // Assert
-    percents.forEach((percent) => {
-      expect(percent).toBeGreaterThanOrEqual(0);
-      expect(percent).toBeLessThanOrEqual(100);
-    });
-  });
-
-  it.each([
-    [0, 0, 0],
-    [0, 3, 0],
-    [3, 3, 100],
-    [1, 3, 33],
-    [2, 3, 67],
-  ])('returns %i of %i done as %i percent', (done, total, expected) => {
-    // Act
-    const percent = completionPercent(done, total);
-
-    // Assert
-    expect(percent).toBe(expected);
-  });
-});
 
 describe('completeDueDate', () => {
   it('keeps every complete ISO date as-is', () => {

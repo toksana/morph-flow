@@ -1,5 +1,6 @@
 import type { DeepPartial } from './deepPartial';
 import { type Task, type TaskList, type TaskPriority, taskSchema } from './taskList.schema';
+import { completionPercent, nonBlank } from './viewUtils';
 
 export interface TaskView {
   /**
@@ -24,13 +25,8 @@ export interface TaskListView {
 
 export const DEFAULT_PRIORITY: TaskPriority = 'medium';
 const VIEW_ID_PREFIX = 'task';
-const PERCENT = 100;
 
 const PRIORITY_RANK: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
-
-/** Treats missing and whitespace-only strings alike: both mean "not streamed yet". */
-const nonBlank = (value: string | undefined): string | undefined =>
-  value !== undefined && value.trim() !== '' ? value : undefined;
 
 /** A date that is still streaming (e.g. "2026-1") is hidden until it is a full ISO date. */
 export const completeDueDate = (value: string | undefined): string | undefined =>
@@ -50,9 +46,6 @@ const toTaskView = (task: DeepPartial<Task> | undefined, index: number): TaskVie
 
 export const sortByPriority = (tasks: TaskView[]): TaskView[] =>
   tasks.toSorted((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]);
-
-export const completionPercent = (doneCount: number, totalCount: number): number =>
-  totalCount === 0 ? 0 : Math.round((doneCount / totalCount) * PERCENT);
 
 export const toTaskListView = (partial: DeepPartial<TaskList> | undefined): TaskListView => {
   const visible = (partial?.tasks ?? [])
