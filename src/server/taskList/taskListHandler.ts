@@ -1,7 +1,7 @@
 import type { LanguageModel } from 'ai';
 
 import { formatPromptDate } from '@/core/widgets/promptDate';
-import { taskListRequestSchema } from '@/core/widgets/taskList.request';
+import { generateRequestSchema } from '@/core/widgets/generate.request';
 
 import { streamTaskList } from './streamTaskList';
 
@@ -35,7 +35,7 @@ const logStreamError = (error: unknown): void => {
 export const createTaskListHandler =
   ({ model, now = () => new Date() }: TaskListHandlerDeps = {}) =>
   async (request: Request): Promise<Response> => {
-    const parsed = taskListRequestSchema.safeParse(await readJson(request));
+    const parsed = generateRequestSchema.safeParse(await readJson(request));
     if (!parsed.success) {
       return Response.json({ error: 'Invalid request' }, { status: INVALID_REQUEST_STATUS });
     }

@@ -1,7 +1,7 @@
 import { useObject } from '@ai-sdk/react';
 
 import { currentTimeZone } from '@/core/widgets/promptDate';
-import type { TaskListRequest } from '@/core/widgets/taskList.request';
+import type { GenerateRequest } from '@/core/widgets/generate.request';
 import { type TaskList, taskListSchema } from '@/core/widgets/taskList.schema';
 import { type TaskListView, toTaskListView } from '@/core/widgets/taskList.view';
 
@@ -23,7 +23,7 @@ export const useTaskListStream = (): TaskListStream => {
   const { object, submit, stop, isLoading, error } = useObject<
     typeof taskListSchema,
     TaskList,
-    TaskListRequest
+    GenerateRequest
   >({ api: TASK_LIST_ENDPOINT, schema: taskListSchema });
 
   return {

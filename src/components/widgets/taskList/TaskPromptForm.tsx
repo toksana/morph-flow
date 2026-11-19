@@ -1,6 +1,6 @@
 import { type FormEvent, type JSX, type KeyboardEvent, useId, useRef } from 'react';
 
-import { MAX_PROMPT_LENGTH } from '@/core/widgets/taskList.request';
+import { MAX_PROMPT_LENGTH } from '@/core/widgets/generate.request';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useAdoptPreHydrationValue } from '@/hooks/useAdoptPreHydrationValue';
