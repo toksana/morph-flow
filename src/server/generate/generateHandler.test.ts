@@ -1,15 +1,17 @@
 import { faker } from '@faker-js/faker';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { buildHabitStreakCard } from '@/core/test/factories/habitStreakCard.factory';
 import { buildTaskList } from '@/core/test/factories/taskList.factory';
-import { taskListSchema } from '@/core/widgets/taskList.schema';
+import { widgetResponseSchema } from '@/core/widgets/widget.schema';
 
 import { mockFailingModel, mockStreamingModel, splitIntoDeltas } from '../test/mockLanguageModel';
-import { buildTaskListSystemPrompt } from './streamTaskList';
-import { createTaskListHandler } from './taskListHandler';
+import { createGenerateHandler } from './generateHandler';
+import { buildWidgetSystemPrompt } from './streamWidget';
 
 const RANDOM_RUNS = 5;
-const ENDPOINT = 'http://localhost/api/task-list';
+const ENDPOINT = 'http://localhost/api/generate';
+const WIDGET_VARIANT_COUNT = 2;
 const TIME_ZONE = 'Europe/Berlin';
 
 const postJson = (body: string): Request =>
@@ -20,26 +22,30 @@ const postPrompt = (prompt: string, timeZone = TIME_ZONE): Request =>
 
 const pickLength = (max: number): number => faker.number.int({ min: 1, max });
 
-describe('createTaskListHandler', () => {
+const buildRandomResponse = () => ({
+  widget: faker.helpers.arrayElement([buildTaskList, buildHabitStreakCard])(),
+});
+
+describe('createGenerateHandler', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it.each(Array.from({ length: RANDOM_RUNS }, (_, run) => run))(
-    'streams text that parses back into the generated task list for random deltas (run %i)',
+    'streams text that parses back into the generated widget for random deltas (run %i)',
     async () => {
       // Arrange
-      const taskList = buildTaskList();
-      const model = mockStreamingModel(splitIntoDeltas(JSON.stringify(taskList), pickLength));
-      const handler = createTaskListHandler({ model });
+      const response = buildRandomResponse();
+      const model = mockStreamingModel(splitIntoDeltas(JSON.stringify(response), pickLength));
+      const handler = createGenerateHandler({ model });
 
       // Act
-      const response = await handler(postPrompt(faker.lorem.sentence()));
-      const text = await response.text();
+      const streamed = await handler(postPrompt(faker.lorem.sentence()));
+      const text = await streamed.text();
 
       // Assert
-      expect(response.status).toBe(200);
-      expect(taskListSchema.parse(JSON.parse(text))).toEqual(taskList);
+      expect(streamed.status).toBe(200);
+      expect(widgetResponseSchema.parse(JSON.parse(text))).toEqual(response);
     },
   );
 
@@ -48,8 +54,8 @@ describe('createTaskListHandler', () => {
     const prompt = faker.lorem.sentence();
     // Still Thursday in UTC, already Friday in Tokyo: the server's day would be wrong.
     const lateThursdayUtc = new Date('2026-11-19T22:30:00Z');
-    const model = mockStreamingModel([JSON.stringify(buildTaskList())]);
-    const handler = createTaskListHandler({ model, now: () => lateThursdayUtc });
+    const model = mockStreamingModel([JSON.stringify(buildRandomResponse())]);
+    const handler = createGenerateHandler({ model, now: () => lateThursdayUtc });
 
     // Act
     const response = await handler(postPrompt(`  ${prompt}  `, 'Asia/Tokyo'));
@@ -58,30 +64,30 @@ describe('createTaskListHandler', () => {
     // Assert
     const [call] = model.doStreamCalls;
     expect(call.prompt).toEqual([
-      { role: 'system', content: buildTaskListSystemPrompt('Friday, 2026-11-20') },
+      { role: 'system', content: buildWidgetSystemPrompt('Friday, 2026-11-20') },
       { role: 'user', content: [{ type: 'text', text: prompt }] },
     ]);
   });
 
-  it('asks the model for JSON that follows the TaskList schema', async () => {
+  it('asks the model for one widget out of every supported type', async () => {
     // Arrange
-    const model = mockStreamingModel([JSON.stringify(buildTaskList())]);
+    const model = mockStreamingModel([JSON.stringify(buildRandomResponse())]);
 
     // Act
-    const response = await createTaskListHandler({ model })(postPrompt(faker.lorem.sentence()));
+    const response = await createGenerateHandler({ model })(postPrompt(faker.lorem.sentence()));
     await response.text();
 
     // Assert
     const [{ responseFormat }] = model.doStreamCalls;
-    const expectedFields = Object.keys(taskListSchema.shape);
     expect(responseFormat).toMatchObject({
       type: 'json',
-      schema: {
-        type: 'object',
-        required: expectedFields,
-        properties: Object.fromEntries(expectedFields.map((field) => [field, expect.any(Object)])),
-      },
+      schema: { type: 'object', required: ['widget'] },
     });
+    // The union becomes `oneOf` or `anyOf`, depending on the schema converter.
+    const schema = responseFormat?.type === 'json' ? responseFormat.schema : undefined;
+    const widget = schema?.properties?.widget;
+    const variants = typeof widget === 'object' ? (widget.oneOf ?? widget.anyOf) : undefined;
+    expect(variants).toHaveLength(WIDGET_VARIANT_COUNT);
   });
 
   it.each([
@@ -95,7 +101,7 @@ describe('createTaskListHandler', () => {
     const model = mockStreamingModel([]);
 
     // Act
-    const response = await createTaskListHandler({ model })(postJson(body));
+    const response = await createGenerateHandler({ model })(postJson(body));
 
     // Assert
     expect(response.status).toBe(400);
@@ -107,7 +113,7 @@ describe('createTaskListHandler', () => {
     // Arrange
     const message = faker.lorem.sentence();
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const handler = createTaskListHandler({ model: mockFailingModel(new Error(message)) });
+    const handler = createGenerateHandler({ model: mockFailingModel(new Error(message)) });
 
     // Act
     const response = await handler(postPrompt(faker.lorem.sentence()));
@@ -115,6 +121,6 @@ describe('createTaskListHandler', () => {
 
     // Assert
     expect(text).toBe('');
-    expect(consoleError).toHaveBeenCalledWith('[task-list] stream failed:', message);
+    expect(consoleError).toHaveBeenCalledWith('[generate] stream failed:', message);
   });
 });
