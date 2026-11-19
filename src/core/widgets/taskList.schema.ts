@@ -8,7 +8,6 @@ export const MAX_TASKS = 20;
 export const taskPrioritySchema = z.enum(TASK_PRIORITIES);
 
 export const taskSchema = z.object({
-  id: z.string().min(1).describe('Stable unique id of the task, e.g. "t1".'),
   title: z.string().min(1).describe('Short actionable task title in the user language.'),
   done: z.boolean().describe('Whether the task is already completed.'),
   priority: taskPrioritySchema.describe('Task priority.'),
