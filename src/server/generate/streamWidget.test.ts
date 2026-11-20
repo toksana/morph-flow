@@ -1,12 +1,18 @@
 import { faker } from '@faker-js/faker';
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_TARGET_DAYS, HABIT_STREAK_CARD_TYPE } from '@/core/widgets/habitStreakCard.schema';
-import { MAX_TASKS, MIN_TASKS, TASK_LIST_TYPE } from '@/core/widgets/taskList.schema';
+import { WIDGETS } from '@/core/widgets/widget.schema';
 
 import { buildWidgetSystemPrompt } from './streamWidget';
 
 const ISO_DATE_LENGTH = 'YYYY-MM-DD'.length;
+const TODAY = 'Thursday, 2026-11-19';
+
+const buildPromptWidget = () => ({
+  type: faker.string.alpha({ length: 10 }),
+  whenToUse: faker.lorem.sentence(),
+  rules: faker.helpers.multiple(() => faker.lorem.sentence(), { count: { min: 1, max: 4 } }),
+});
 
 describe('buildWidgetSystemPrompt', () => {
   it('states the given day so the model can resolve relative dates', () => {
@@ -20,35 +26,30 @@ describe('buildWidgetSystemPrompt', () => {
     expect(prompt).toContain(`Today is ${today}.`);
   });
 
-  it('asks for a task count within the schema bounds', () => {
+  it.each(WIDGETS.map((widget) => [widget.type, widget] as const))(
+    'tells the model when to choose %s and how to fill it',
+    (type, widget) => {
+      // Act
+      const prompt = buildWidgetSystemPrompt(TODAY);
+
+      // Assert
+      expect(prompt).toContain(`- ${type}: ${widget.whenToUse}`);
+      expect(prompt).toContain(`For a ${type}:\n${widget.rules.join('\n')}`);
+    },
+  );
+
+  it('builds the choice and the rules from any registry, not a fixed list', () => {
+    // Arrange
+    const widgets = faker.helpers.multiple(buildPromptWidget, { count: { min: 1, max: 6 } });
+
     // Act
-    const prompt = buildWidgetSystemPrompt('Thursday, 2026-11-19');
+    const prompt = buildWidgetSystemPrompt(TODAY, widgets);
 
     // Assert
-    expect(prompt).toContain(`between ${MIN_TASKS} and ${MAX_TASKS} tasks`);
-  });
-
-  it('asks for date-only due dates that match the schema format', () => {
-    // Act
-    const prompt = buildWidgetSystemPrompt('Thursday, 2026-11-19');
-
-    // Assert
-    expect(prompt).toContain('YYYY-MM-DD, date only');
-  });
-
-  it.each([TASK_LIST_TYPE, HABIT_STREAK_CARD_TYPE])('tells the model when to choose %s', (type) => {
-    // Act
-    const prompt = buildWidgetSystemPrompt('Thursday, 2026-11-19');
-
-    // Assert
-    expect(prompt).toContain(`Choose ${type} `);
-  });
-
-  it('names the same default target as the schema', () => {
-    // Act
-    const prompt = buildWidgetSystemPrompt('Thursday, 2026-11-19');
-
-    // Assert
-    expect(prompt).toContain(`otherwise use ${DEFAULT_TARGET_DAYS}.`);
+    widgets.forEach((widget) => {
+      expect(prompt).toContain(`- ${widget.type}: ${widget.whenToUse}`);
+      expect(prompt).toContain(`For a ${widget.type}:\n${widget.rules.join('\n')}`);
+    });
+    WIDGETS.forEach((widget) => expect(prompt).not.toContain(widget.whenToUse));
   });
 });
