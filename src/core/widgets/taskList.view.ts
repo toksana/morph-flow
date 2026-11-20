@@ -15,6 +15,7 @@ export interface TaskView {
   due?: string;
 }
 
+/** Tasks keep the order the model wrote them in: sorting a half-streamed list would make rows jump. */
 export interface TaskListView {
   title: string;
   tasks: TaskView[];
@@ -25,8 +26,6 @@ export interface TaskListView {
 
 export const DEFAULT_PRIORITY: TaskPriority = 'medium';
 const VIEW_ID_PREFIX = 'task';
-
-const PRIORITY_RANK: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
 
 /** A date that is still streaming (e.g. "2026-1") is hidden until it is a full ISO date. */
 export const completeDueDate = (value: string | undefined): string | undefined =>
@@ -44,14 +43,10 @@ const toTaskView = (task: DeepPartial<Task> | undefined, index: number): TaskVie
   };
 };
 
-export const sortByPriority = (tasks: TaskView[]): TaskView[] =>
-  tasks.toSorted((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]);
-
 export const toTaskListView = (partial: DeepPartial<TaskList> | undefined): TaskListView => {
-  const visible = (partial?.tasks ?? [])
+  const tasks = (partial?.tasks ?? [])
     .map(toTaskView)
     .filter((task): task is TaskView => task !== null);
-  const tasks = sortByPriority(visible);
   const doneCount = tasks.filter((task) => task.done).length;
 
   return {
