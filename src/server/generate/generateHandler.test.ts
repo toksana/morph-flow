@@ -7,7 +7,7 @@ import { widgetResponseSchema } from '@/core/widgets/widget.schema';
 
 import { mockFailingModel, mockStreamingModel, splitIntoDeltas } from '../test/mockLanguageModel';
 import { createGenerateHandler } from './generateHandler';
-import { buildWidgetSystemPrompt } from './streamWidget';
+import { buildWidgetSystemPrompt, MAX_OUTPUT_TOKENS } from './streamWidget';
 
 const RANDOM_RUNS = 5;
 const ENDPOINT = 'http://localhost/api/generate';
@@ -88,6 +88,40 @@ describe('createGenerateHandler', () => {
     const widget = schema?.properties?.widget;
     const variants = typeof widget === 'object' ? (widget.oneOf ?? widget.anyOf) : undefined;
     expect(variants).toHaveLength(WIDGET_VARIANT_COUNT);
+  });
+
+  it('caps the length of the model output', async () => {
+    // Arrange
+    const model = mockStreamingModel([JSON.stringify(buildRandomResponse())]);
+
+    // Act
+    const response = await createGenerateHandler({ model })(postPrompt(faker.lorem.sentence()));
+    await response.text();
+
+    // Assert
+    const [call] = model.doStreamCalls;
+    expect(call.maxOutputTokens).toBe(MAX_OUTPUT_TOKENS);
+  });
+
+  it('cancels the model call when the client aborts the request', async () => {
+    // Arrange
+    const model = mockStreamingModel([JSON.stringify(buildRandomResponse())]);
+    const controller = new AbortController();
+    const request = new Request(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: faker.lorem.sentence(), timeZone: TIME_ZONE }),
+      signal: controller.signal,
+    });
+
+    // Act
+    const response = await createGenerateHandler({ model })(request);
+    controller.abort();
+    await response.text().catch(() => undefined);
+
+    // Assert
+    const [call] = model.doStreamCalls;
+    expect(call.abortSignal?.aborted).toBe(true);
   });
 
   it.each([

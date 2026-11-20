@@ -44,6 +44,7 @@ export const createGenerateHandler =
       prompt,
       today: formatPromptDate(now(), timeZone),
       model,
+      abortSignal: request.signal,
       onError: logStreamError,
     });
   };
