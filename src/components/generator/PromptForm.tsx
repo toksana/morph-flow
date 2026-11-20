@@ -8,11 +8,10 @@ import { useAdoptPreHydrationValue } from '@/hooks/useAdoptPreHydrationValue';
 import { PromptAction } from './PromptAction';
 
 export const PROMPT_LABEL = 'What do you want to create?';
-const PROMPT_PLACEHOLDER =
-  'Describe what you need, e.g. "tasks for tomorrow" or "a 30-day reading challenge"';
 
 interface PromptFormProps {
   value: string;
+  placeholder: string;
   onValueChange: (value: string) => void;
   onSubmit: () => void;
   onStop: () => void;
@@ -25,6 +24,7 @@ const isSubmitKey = (event: KeyboardEvent<HTMLTextAreaElement>): boolean =>
 
 export const PromptForm = ({
   value,
+  placeholder,
   onValueChange,
   onSubmit,
   onStop,
@@ -62,7 +62,7 @@ export const PromptForm = ({
           value={value}
           onChange={(event) => onValueChange(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={PROMPT_PLACEHOLDER}
+          placeholder={placeholder}
           maxLength={MAX_PROMPT_LENGTH}
           rows={1}
           className="min-h-24 max-h-60 flex-1 resize-none border-0 bg-transparent px-1 shadow-none focus-visible:ring-0 dark:bg-transparent"

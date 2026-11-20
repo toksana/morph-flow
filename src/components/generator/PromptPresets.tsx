@@ -8,7 +8,7 @@ import { WIDGET_ICONS } from './widgetIcons';
 export const PRESETS_LABEL = 'Or try an example';
 
 interface PromptPresetsProps {
-  /** Called with the example text; the generator fills the field and starts right away. */
+  /** Called with the example text; the generator sends it right away. */
   onPick: (prompt: string) => void;
   disabled: boolean;
 }

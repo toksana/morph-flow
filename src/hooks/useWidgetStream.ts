@@ -22,13 +22,18 @@ export interface WidgetStream {
   stop: () => void;
 }
 
+interface WidgetStreamOptions {
+  /** Called when a request fails (not when it is stopped). */
+  onError?: () => void;
+}
+
 /** Streams one widget for a prompt, resolving relative dates in the user's time zone. */
-export const useWidgetStream = (): WidgetStream => {
+export const useWidgetStream = ({ onError }: WidgetStreamOptions = {}): WidgetStream => {
   const { object, submit, stop, isLoading, error } = useObject<
     typeof widgetResponseSchema,
     WidgetResponse,
     GenerateRequest
-  >({ api: GENERATE_ENDPOINT, schema: widgetResponseSchema });
+  >({ api: GENERATE_ENDPOINT, schema: widgetResponseSchema, onError: () => onError?.() });
 
   return {
     // `submit` clears the object first, so a new request unmounts the previous widget

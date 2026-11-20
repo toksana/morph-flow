@@ -12,7 +12,7 @@ import { CHECK_IN_TEXT, UNDO_TEXT } from '@/components/widgets/habitStreakCard/C
 
 import { PROMPT_LABEL } from './PromptForm';
 import { PRESETS_LABEL } from './PromptPresets';
-import { WidgetGenerator } from './WidgetGenerator';
+import { NEXT_PLACEHOLDER, START_PLACEHOLDER, WidgetGenerator } from './WidgetGenerator';
 import { WIDGET_SKELETON_LABEL } from './WidgetSkeleton';
 
 // Not UTC and not the machine's zone, so a hard-coded or server-side zone cannot pass.
@@ -58,6 +58,8 @@ const typePrompt = (prompt: string) => {
     target: { value: prompt },
   });
 };
+
+const promptField = () => screen.getByLabelText(PROMPT_LABEL);
 
 const clickGenerate = () => fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
@@ -177,6 +179,7 @@ describe('WidgetGenerator', () => {
     expect(screen.getByRole('button', { name: UNDO_TEXT })).toBeInTheDocument();
 
     // Act
+    typePrompt(faker.lorem.sentence());
     clickGenerate();
     second.push(responseJson(card));
     second.close();
@@ -187,7 +190,7 @@ describe('WidgetGenerator', () => {
   });
 
   it.each(WIDGETS.map((widget) => [widget.type, widget.examplePrompt] as const))(
-    'sends the %s example at once and keeps it in the field',
+    'sends the %s example at once and leaves the field ready for the next one',
     async (_type, examplePrompt) => {
       // Arrange
       const stream = controlledResponse();
@@ -202,13 +205,72 @@ describe('WidgetGenerator', () => {
       await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
       const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
       expect(JSON.parse(String(init.body))).toMatchObject({ prompt: examplePrompt });
-      expect(screen.getByLabelText(PROMPT_LABEL)).toHaveValue(examplePrompt);
+      expect(promptField()).toHaveValue('');
+      expect(promptField()).toHaveAttribute('placeholder', NEXT_PLACEHOLDER);
       within(presets)
         .getAllByRole('button')
         .forEach((button) => expect(button).toBeDisabled());
       stream.close();
     },
   );
+
+  it('clears the field on send and switches to the next-card placeholder', async () => {
+    // Arrange
+    const stream = controlledResponse();
+    mockFetch(stream.response);
+    render(<WidgetGenerator />);
+    expect(promptField()).toHaveAttribute('placeholder', START_PLACEHOLDER);
+    typePrompt(faker.lorem.sentence());
+
+    // Act
+    clickGenerate();
+
+    // Assert
+    expect(promptField()).toHaveValue('');
+    expect(promptField()).toHaveAttribute('placeholder', NEXT_PLACEHOLDER);
+
+    // Act: stopping keeps the half-built card, so the text does not come back.
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
+
+    // Assert
+    expect(promptField()).toHaveValue('');
+    stream.close();
+  });
+
+  it('puts the sent text back in the field when the request fails', async () => {
+    // Arrange
+    const prompt = faker.lorem.sentence();
+    mockFetch(new Response(null, { status: HTTP_SERVER_ERROR }));
+    render(<WidgetGenerator />);
+    typePrompt(prompt);
+
+    // Act
+    clickGenerate();
+
+    // Assert
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(promptField()).toHaveValue(prompt);
+  });
+
+  it('keeps text typed during a request that then fails', async () => {
+    // Arrange
+    const typedLater = faker.lorem.sentence();
+    let failRequest: (response: Response) => void = () => {};
+    const fetchMock = vi.fn(() => new Promise<Response>((resolve) => (failRequest = resolve)));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<WidgetGenerator />);
+    typePrompt(faker.lorem.sentence());
+    clickGenerate();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    typePrompt(typedLater);
+
+    // Act
+    await act(async () => failRequest(new Response(null, { status: HTTP_SERVER_ERROR })));
+
+    // Assert
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(promptField()).toHaveValue(typedLater);
+  });
 
   it('shows a generic error and no card when the request fails', async () => {
     // Arrange
@@ -284,7 +346,6 @@ describe('WidgetGenerator', () => {
     fireEvent.click(within(container).getByRole('button', { name: 'Generate' }));
 
     // Assert
-    expect(field.value).toBe(prompt);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toMatchObject({ prompt });
