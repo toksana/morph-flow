@@ -8,6 +8,7 @@ import type { TaskPriority } from '@/core/widgets/taskList.schema';
 import { toTaskListView } from '@/core/widgets/taskList.view';
 
 import { DEFAULT_LOCALE, TaskList } from './TaskList';
+import { TASK_LIST_LABEL } from './TaskListHeader';
 
 const RANDOM_RUNS = 10;
 const ISO_DATE_LENGTH = 'YYYY-MM-DD'.length;
@@ -62,6 +63,14 @@ describe('TaskList', () => {
     expect(screen.queryByRole('list')).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
     expect(screen.queryByText('0/0')).toBeNull();
+  });
+
+  it('names the card as a task list before its title or tasks have streamed', () => {
+    // Act
+    render(<TaskList view={toTaskListView(undefined)} isStreaming />);
+
+    // Assert
+    expect(screen.getByText(TASK_LIST_LABEL)).toBeInTheDocument();
   });
 
   it('shows the streamed title before any task has arrived', () => {
