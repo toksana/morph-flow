@@ -34,6 +34,10 @@ export const applyTodayMark = (
   return Math.max(0, streakDays + (markedDone ? 1 : -1));
 };
 
+/** A streak that is already marked done today counts today, whatever the model streamed. */
+const includeToday = (streakDays: number, doneToday: boolean): number =>
+  doneToday ? Math.max(1, streakDays) : streakDays;
+
 /**
  * @param todayMark the user's local "done today" toggle; `undefined` keeps the streamed value
  */
@@ -43,7 +47,7 @@ export const toHabitStreakView = (
 ): HabitStreakView => {
   const streamedDone = partial?.completedToday ?? false;
   const completedToday = todayMark ?? streamedDone;
-  const streamedStreak = Math.max(0, partial?.streakDays ?? 0);
+  const streamedStreak = includeToday(Math.max(0, partial?.streakDays ?? 0), streamedDone);
   const streakDays = applyTodayMark(streamedStreak, streamedDone, completedToday);
   const targetDays = Math.max(MIN_TARGET_DAYS, partial?.targetDays ?? DEFAULT_TARGET_DAYS);
 

@@ -114,6 +114,29 @@ describe('toHabitStreakView', () => {
     expect(view.streakDays).toBe(card.streakDays + 1);
   });
 
+  it('counts today when it is done but the streamed streak is 0', () => {
+    // Arrange
+    const card = buildHabitStreakCard({ streakDays: 0, completedToday: true });
+
+    // Act
+    const view = toHabitStreakView(card);
+
+    // Assert
+    expect(view.streakDays).toBe(1);
+    expect(toHabitStreakView(card, false).streakDays).toBe(0);
+  });
+
+  it('never shows a done-today card with an empty streak', () => {
+    // Arrange
+    const cards = randomCards().map((card) => ({ ...card, streakDays: 0, completedToday: true }));
+
+    // Act
+    const views = cards.map((card) => toHabitStreakView(card));
+
+    // Assert
+    views.forEach((view) => expect(view.streakDays).toBeGreaterThanOrEqual(1));
+  });
+
   it('caps progress at 100 percent once the streak passes the target', () => {
     // Arrange
     const targetDays = faker.number.int({ min: 1, max: 30 });

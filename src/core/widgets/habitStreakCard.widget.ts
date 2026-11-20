@@ -13,6 +13,7 @@ export const habitStreakCardWidget = {
   rules: [
     'Take streakDays from the request; use 0 when the user gives no streak, never invent one.',
     'Set completedToday to true only when the user says the habit is already done today.',
+    'When completedToday is true, streakDays counts today: it is at least 1 (e.g. "ran today", no past days → 1).',
     `Take targetDays from a challenge length or goal the user names; otherwise use ${DEFAULT_TARGET_DAYS}.`,
   ],
   examplePrompt: "30-day reading challenge, I'm 5 days in and already read today",
