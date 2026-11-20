@@ -1,9 +1,11 @@
-import { Flame, Target } from 'lucide-react';
+import { Target } from 'lucide-react';
 import type { JSX } from 'react';
 
 import type { HabitStreakView } from '@/core/widgets/habitStreakCard.view';
 import { Badge } from '@/components/ui/badge';
 import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+import { WidgetIconTile } from '../WidgetIconTile';
 
 const CARD_LABEL = 'Habit streak';
 
@@ -17,12 +19,7 @@ interface HabitStreakHeaderProps {
  */
 export const HabitStreakHeader = ({ view }: HabitStreakHeaderProps): JSX.Element => (
   <CardHeader className="flex items-center gap-3">
-    <span
-      aria-hidden
-      className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 text-lg text-amber-600 dark:text-amber-400"
-    >
-      {view.emoji ?? <Flame className="size-5" />}
-    </span>
+    <WidgetIconTile type="HabitStreakCard">{view.emoji}</WidgetIconTile>
     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
       <CardDescription className="font-mono text-xs tracking-widest uppercase">
         {CARD_LABEL}

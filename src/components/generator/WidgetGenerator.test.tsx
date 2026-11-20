@@ -10,9 +10,10 @@ import { buildTaskList, buildTasks } from '@/core/test/factories/taskList.factor
 import { WIDGETS } from '@/core/widgets/widget.schema';
 import { CHECK_IN_TEXT, UNDO_TEXT } from '@/components/widgets/habitStreakCard/CheckInButton';
 
+import { NEW_CARD_LABEL } from './NewCardButton';
 import { PROMPT_LABEL } from './PromptForm';
 import { PRESETS_LABEL } from './PromptPresets';
-import { WidgetGenerator } from './WidgetGenerator';
+import { NEXT_PLACEHOLDER, START_PLACEHOLDER, WidgetGenerator } from './WidgetGenerator';
 import { WIDGET_SKELETON_LABEL } from './WidgetSkeleton';
 
 // Not UTC and not the machine's zone, so a hard-coded or server-side zone cannot pass.
@@ -58,6 +59,8 @@ const typePrompt = (prompt: string) => {
     target: { value: prompt },
   });
 };
+
+const promptField = () => screen.getByLabelText(PROMPT_LABEL);
 
 const clickGenerate = () => fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
@@ -177,6 +180,7 @@ describe('WidgetGenerator', () => {
     expect(screen.getByRole('button', { name: UNDO_TEXT })).toBeInTheDocument();
 
     // Act
+    typePrompt(faker.lorem.sentence());
     clickGenerate();
     second.push(responseJson(card));
     second.close();
@@ -187,10 +191,11 @@ describe('WidgetGenerator', () => {
   });
 
   it.each(WIDGETS.map((widget) => [widget.type, widget.examplePrompt] as const))(
-    'fills the prompt with the %s example without sending it',
-    (_type, examplePrompt) => {
+    'sends the %s example at once and leaves the field ready for the next one',
+    async (_type, examplePrompt) => {
       // Arrange
-      const fetchMock = mockFetch();
+      const stream = controlledResponse();
+      const fetchMock = mockFetch(stream.response);
       render(<WidgetGenerator />);
       const presets = screen.getByRole('group', { name: PRESETS_LABEL });
 
@@ -198,10 +203,125 @@ describe('WidgetGenerator', () => {
       fireEvent.click(within(presets).getByRole('button', { name: examplePrompt }));
 
       // Assert
-      expect(screen.getByLabelText(PROMPT_LABEL)).toHaveValue(examplePrompt);
-      expect(fetchMock).not.toHaveBeenCalled();
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+      expect(JSON.parse(String(init.body))).toMatchObject({ prompt: examplePrompt });
+      expect(promptField()).toHaveValue('');
+      expect(promptField()).toHaveAttribute('placeholder', NEXT_PLACEHOLDER);
+      within(presets)
+        .getAllByRole('button')
+        .forEach((button) => expect(button).toBeDisabled());
+      stream.close();
     },
   );
+
+  it('clears the field on send and switches to the next-card placeholder', async () => {
+    // Arrange
+    const stream = controlledResponse();
+    mockFetch(stream.response);
+    render(<WidgetGenerator />);
+    expect(promptField()).toHaveAttribute('placeholder', START_PLACEHOLDER);
+    typePrompt(faker.lorem.sentence());
+
+    // Act
+    clickGenerate();
+
+    // Assert
+    expect(promptField()).toHaveValue('');
+    expect(promptField()).toHaveAttribute('placeholder', NEXT_PLACEHOLDER);
+
+    // Act: stopping keeps the half-built card, so the text does not come back.
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
+
+    // Assert
+    expect(promptField()).toHaveValue('');
+    stream.close();
+  });
+
+  it('puts the sent text back in the field when the request fails', async () => {
+    // Arrange
+    const prompt = faker.lorem.sentence();
+    mockFetch(new Response(null, { status: HTTP_SERVER_ERROR }));
+    render(<WidgetGenerator />);
+    typePrompt(prompt);
+
+    // Act
+    clickGenerate();
+
+    // Assert
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(promptField()).toHaveValue(prompt);
+  });
+
+  it('keeps text typed during a request that then fails', async () => {
+    // Arrange
+    const typedLater = faker.lorem.sentence();
+    let failRequest: (response: Response) => void = () => {};
+    const fetchMock = vi.fn(() => new Promise<Response>((resolve) => (failRequest = resolve)));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<WidgetGenerator />);
+    typePrompt(faker.lorem.sentence());
+    clickGenerate();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    typePrompt(typedLater);
+
+    // Act
+    await act(async () => failRequest(new Response(null, { status: HTTP_SERVER_ERROR })));
+
+    // Assert
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(promptField()).toHaveValue(typedLater);
+  });
+
+  it('swaps the intro and examples for the card once a request is sent', async () => {
+    // Arrange
+    const introText = faker.lorem.sentence();
+    const card = buildHabitStreakCard();
+    const stream = controlledResponse();
+    mockFetch(stream.response);
+    render(<WidgetGenerator intro={<p>{introText}</p>} />);
+    expect(screen.getByText(introText)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: NEW_CARD_LABEL })).toBeNull();
+    typePrompt(faker.lorem.sentence());
+
+    // Act
+    clickGenerate();
+    stream.push(responseJson(card));
+    stream.close();
+
+    // Assert
+    expect(await screen.findByText(card.title)).toBeInTheDocument();
+    expect(screen.queryByText(introText)).toBeNull();
+    expect(screen.queryByRole('group', { name: PRESETS_LABEL })).toBeNull();
+    expect(screen.getByRole('button', { name: NEW_CARD_LABEL })).toBeInTheDocument();
+  });
+
+  it('returns to the start screen on New, dropping the card mid-stream', async () => {
+    // Arrange
+    const introText = faker.lorem.sentence();
+    const card = buildHabitStreakCard();
+    const json = responseJson(card);
+    const stream = controlledResponse();
+    mockFetch(stream.response);
+    render(<WidgetGenerator intro={<p>{introText}</p>} />);
+    typePrompt(faker.lorem.sentence());
+    clickGenerate();
+    stream.push(json.slice(0, json.indexOf('"streakDays"')));
+    expect(await screen.findByText(card.title)).toBeInTheDocument();
+
+    // Act
+    fireEvent.click(screen.getByRole('button', { name: NEW_CARD_LABEL }));
+
+    // Assert: the request is stopped, not left running behind the start screen.
+    expect(await screen.findByText(introText)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeInTheDocument();
+    stream.push(json.slice(json.indexOf('"streakDays"')));
+    stream.close();
+    expect(screen.getByRole('group', { name: PRESETS_LABEL })).toBeInTheDocument();
+    expect(screen.queryByText(card.title)).toBeNull();
+    expect(screen.queryByRole('button', { name: NEW_CARD_LABEL })).toBeNull();
+    expect(promptField()).toHaveAttribute('placeholder', START_PLACEHOLDER);
+  });
 
   it('shows a generic error and no card when the request fails', async () => {
     // Arrange
@@ -277,7 +397,6 @@ describe('WidgetGenerator', () => {
     fireEvent.click(within(container).getByRole('button', { name: 'Generate' }));
 
     // Assert
-    expect(field.value).toBe(prompt);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toMatchObject({ prompt });

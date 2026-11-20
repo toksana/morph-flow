@@ -20,15 +20,22 @@ export interface WidgetStream {
   hasError: boolean;
   generate: (prompt: string) => void;
   stop: () => void;
+  /** Stops any request and drops the widget and error, back to the empty state. */
+  reset: () => void;
+}
+
+interface WidgetStreamOptions {
+  /** Called when a request fails (not when it is stopped). */
+  onError?: () => void;
 }
 
 /** Streams one widget for a prompt, resolving relative dates in the user's time zone. */
-export const useWidgetStream = (): WidgetStream => {
-  const { object, submit, stop, isLoading, error } = useObject<
+export const useWidgetStream = ({ onError }: WidgetStreamOptions = {}): WidgetStream => {
+  const { object, submit, stop, clear, isLoading, error } = useObject<
     typeof widgetResponseSchema,
     WidgetResponse,
     GenerateRequest
-  >({ api: GENERATE_ENDPOINT, schema: widgetResponseSchema });
+  >({ api: GENERATE_ENDPOINT, schema: widgetResponseSchema, onError: () => onError?.() });
 
   return {
     // `submit` clears the object first, so a new request unmounts the previous widget
@@ -39,5 +46,6 @@ export const useWidgetStream = (): WidgetStream => {
     hasError: error !== undefined,
     generate: (prompt) => submit({ prompt, timeZone: currentTimeZone() }),
     stop,
+    reset: clear,
   };
 };
