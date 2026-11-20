@@ -12,4 +12,5 @@ export const taskListWidget = {
     'Set done to true only for tasks the user says are already finished.',
     'Set a due date (YYYY-MM-DD, date only) only when the request names a specific date or a relative one ("tomorrow", "next Friday"); resolve relative dates from today; never invent dates.',
   ],
+  examplePrompt: 'My tasks for tomorrow: workout, finish the report, call mom',
 } as const satisfies WidgetDefinition<typeof TASK_LIST_TYPE, typeof taskListSchema>;

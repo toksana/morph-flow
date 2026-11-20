@@ -77,6 +77,7 @@ describe('WIDGETS', () => {
       expect(widget.schema.shape.type.value).toBe(type);
       expect(widget.whenToUse.trim()).not.toBe('');
       expect(widget.rules.length).toBeGreaterThan(0);
+      expect(widget.examplePrompt.trim()).not.toBe('');
     },
   );
 

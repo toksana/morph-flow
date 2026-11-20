@@ -16,4 +16,6 @@ export interface WidgetDefinition<
   whenToUse: string;
   /** How to fill the fields; formats live in the schema descriptions instead. */
   rules: readonly string[];
+  /** A request that should produce this widget; shown as a preset in the prompt form. */
+  examplePrompt: string;
 }

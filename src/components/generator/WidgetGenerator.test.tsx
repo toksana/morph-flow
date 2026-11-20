@@ -5,10 +5,15 @@ import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { buildHabitStreakCard } from '@/core/test/factories/habitStreakCard.factory';
 import { buildTaskList, buildTasks } from '@/core/test/factories/taskList.factory';
-import { TASK_LIST_ENDPOINT } from '@/hooks/useTaskListStream';
+import { WIDGETS } from '@/core/widgets/widget.schema';
+import { CHECK_IN_TEXT, UNDO_TEXT } from '@/components/widgets/habitStreakCard/CheckInButton';
 
-import { TaskListGenerator } from './TaskListGenerator';
+import { PROMPT_LABEL } from './PromptForm';
+import { PRESETS_LABEL } from './PromptPresets';
+import { WidgetGenerator } from './WidgetGenerator';
+import { WIDGET_SKELETON_LABEL } from './WidgetSkeleton';
 
 // Not UTC and not the machine's zone, so a hard-coded or server-side zone cannot pass.
 const USER_TIME_ZONE = 'Pacific/Kiritimati';
@@ -37,31 +42,36 @@ const controlledResponse = () => {
   };
 };
 
-const mockFetch = (response: Response) => {
-  const fetchMock = vi.fn(async () => response);
+/** Answers each request with the next response, in order. */
+const mockFetch = (...responses: Response[]) => {
+  const queue = [...responses];
+  const fetchMock = vi.fn(async () => queue.shift() ?? new Response(null, { status: HTTP_OK }));
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
 };
 
+/** The JSON the endpoint streams for one widget. */
+const responseJson = (widget: object): string => JSON.stringify({ widget });
+
 const typePrompt = (prompt: string) => {
-  fireEvent.change(screen.getByLabelText('What do you want to get done?'), {
+  fireEvent.change(screen.getByLabelText(PROMPT_LABEL), {
     target: { value: prompt },
   });
 };
 
 const clickGenerate = () => fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
-describe('TaskListGenerator', () => {
+describe('WidgetGenerator', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("posts the prompt with the user's time zone to the task list endpoint", async () => {
+  it("posts the prompt with the user's time zone to the generate endpoint", async () => {
     // Arrange
     const prompt = faker.lorem.sentence();
     const stream = controlledResponse();
     const fetchMock = mockFetch(stream.response);
-    render(<TaskListGenerator />);
+    render(<WidgetGenerator />);
 
     // Act
     typePrompt(prompt);
@@ -70,7 +80,7 @@ describe('TaskListGenerator', () => {
     // Assert
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe(TASK_LIST_ENDPOINT);
+    expect(url).toBe('/api/generate');
     expect(init.method).toBe('POST');
     expect(JSON.parse(String(init.body))).toEqual({ prompt, timeZone: USER_TIME_ZONE });
     stream.close();
@@ -79,11 +89,11 @@ describe('TaskListGenerator', () => {
   it('renders tasks as they stream in and returns to Generate when done', async () => {
     // Arrange
     const taskList = buildTaskList({ tasks: buildTasks(3) });
-    const json = JSON.stringify(taskList);
+    const json = responseJson(taskList);
     const secondTaskStart = json.indexOf(JSON.stringify(taskList.tasks[1]));
     const stream = controlledResponse();
     mockFetch(stream.response);
-    render(<TaskListGenerator />);
+    render(<WidgetGenerator />);
     typePrompt(faker.lorem.sentence());
     clickGenerate();
 
@@ -105,34 +115,98 @@ describe('TaskListGenerator', () => {
     expect(screen.getAllByRole('checkbox')).toHaveLength(taskList.tasks.length);
   });
 
-  it('shows a busy card before the first chunk and stops on demand', async () => {
+  it('shows a busy skeleton until the widget type is complete, then stops on demand', async () => {
     // Arrange
     const stream = controlledResponse();
     mockFetch(stream.response);
-    render(<TaskListGenerator />);
+    render(<WidgetGenerator />);
     typePrompt(faker.lorem.sentence());
 
     // Act
     clickGenerate();
 
     // Assert
-    expect(await screen.findByText('Generating tasks…')).toBeInTheDocument();
-    expect(screen.getByText('Generating tasks…').closest('[data-slot=card]')).toHaveAttribute(
-      'aria-busy',
-      'true',
-    );
+    const skeleton = await screen.findByLabelText(WIDGET_SKELETON_LABEL);
+    expect(skeleton).toHaveAttribute('aria-busy', 'true');
+
+    // Act: a half-written type must not pick a component yet.
+    stream.push('{"widget":{"type":"Habit');
+
+    // Assert
+    await waitFor(() => expect(screen.getByLabelText(WIDGET_SKELETON_LABEL)).toBeInTheDocument());
 
     // Act
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
 
     // Assert
     expect(await screen.findByRole('button', { name: 'Generate' })).toBeInTheDocument();
+    expect(screen.queryByLabelText(WIDGET_SKELETON_LABEL)).toBeNull();
   });
+
+  it('renders a HabitStreakCard when the model picks one', async () => {
+    // Arrange
+    const card = buildHabitStreakCard({ completedToday: false });
+    const stream = controlledResponse();
+    mockFetch(stream.response);
+    render(<WidgetGenerator />);
+    typePrompt(faker.lorem.sentence());
+    clickGenerate();
+
+    // Act
+    stream.push(responseJson(card));
+    stream.close();
+
+    // Assert
+    expect(await screen.findByText(card.title)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: CHECK_IN_TEXT })).toBeEnabled();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('drops the local check-in when a new card is generated', async () => {
+    // Arrange
+    const card = buildHabitStreakCard({ completedToday: false });
+    const first = controlledResponse();
+    const second = controlledResponse();
+    mockFetch(first.response, second.response);
+    render(<WidgetGenerator />);
+    typePrompt(faker.lorem.sentence());
+    clickGenerate();
+    first.push(responseJson(card));
+    first.close();
+    fireEvent.click(await screen.findByRole('button', { name: CHECK_IN_TEXT }));
+    expect(screen.getByRole('button', { name: UNDO_TEXT })).toBeInTheDocument();
+
+    // Act
+    clickGenerate();
+    second.push(responseJson(card));
+    second.close();
+
+    // Assert
+    expect(await screen.findByRole('button', { name: CHECK_IN_TEXT })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: UNDO_TEXT })).toBeNull();
+  });
+
+  it.each(WIDGETS.map((widget) => [widget.type, widget.examplePrompt] as const))(
+    'fills the prompt with the %s example without sending it',
+    (_type, examplePrompt) => {
+      // Arrange
+      const fetchMock = mockFetch();
+      render(<WidgetGenerator />);
+      const presets = screen.getByRole('group', { name: PRESETS_LABEL });
+
+      // Act
+      fireEvent.click(within(presets).getByRole('button', { name: examplePrompt }));
+
+      // Assert
+      expect(screen.getByLabelText(PROMPT_LABEL)).toHaveValue(examplePrompt);
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
 
   it('shows a generic error and no card when the request fails', async () => {
     // Arrange
     mockFetch(new Response('upstream detail that must not leak', { status: HTTP_SERVER_ERROR }));
-    render(<TaskListGenerator />);
+    render(<WidgetGenerator />);
     typePrompt(faker.lorem.sentence());
 
     // Act
@@ -144,12 +218,13 @@ describe('TaskListGenerator', () => {
     );
     expect(screen.queryByText(/upstream detail/)).toBeNull();
     expect(screen.queryByText('No tasks yet')).toBeNull();
+    expect(screen.queryByLabelText(WIDGET_SKELETON_LABEL)).toBeNull();
   });
 
   it.each([[''], ['   \n']])('keeps Generate disabled for prompt %j', (prompt) => {
     // Arrange
     const fetchMock = mockFetch(controlledResponse().response);
-    render(<TaskListGenerator />);
+    render(<WidgetGenerator />);
 
     // Act
     typePrompt(prompt);
@@ -164,7 +239,7 @@ describe('TaskListGenerator', () => {
     // Arrange
     const stream = controlledResponse();
     const fetchMock = mockFetch(stream.response);
-    render(<TaskListGenerator />);
+    render(<WidgetGenerator />);
     typePrompt(faker.lorem.sentence());
 
     // Act
@@ -188,7 +263,7 @@ describe('TaskListGenerator', () => {
     const stream = controlledResponse();
     const fetchMock = mockFetch(stream.response);
     const container = document.createElement('div');
-    container.innerHTML = renderToString(<TaskListGenerator />);
+    container.innerHTML = renderToString(<WidgetGenerator />);
     document.body.append(container);
     const field = container.querySelector('textarea') as HTMLTextAreaElement;
     const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
@@ -197,7 +272,7 @@ describe('TaskListGenerator', () => {
 
     // Act
     await act(async () => {
-      hydrateRoot(container, <TaskListGenerator />);
+      hydrateRoot(container, <WidgetGenerator />);
     });
     fireEvent.click(within(container).getByRole('button', { name: 'Generate' }));
 

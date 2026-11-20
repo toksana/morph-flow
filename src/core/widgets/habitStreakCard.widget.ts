@@ -15,4 +15,5 @@ export const habitStreakCardWidget = {
     'Set completedToday to true only when the user says the habit is already done today.',
     `Take targetDays from a challenge length or goal the user names; otherwise use ${DEFAULT_TARGET_DAYS}.`,
   ],
+  examplePrompt: "30-day reading challenge, I'm 5 days in and already read today",
 } as const satisfies WidgetDefinition<typeof HABIT_STREAK_CARD_TYPE, typeof habitStreakCardSchema>;
