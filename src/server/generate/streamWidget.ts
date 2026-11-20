@@ -37,10 +37,15 @@ export const buildWidgetSystemPrompt = (
 ): string =>
   [...choiceSection(widgets), `Today is ${today}.`, ...widgets.flatMap(rulesSection)].join('\n');
 
+/** Ceiling on the model's output: a full 20-task list needs well under this, a runaway reply is cut. */
+export const MAX_OUTPUT_TOKENS = 2000;
+
 interface StreamWidgetOptions {
   prompt: string;
   today: string;
   model?: LanguageModel;
+  /** Aborts the model call, e.g. when the client stops the request. */
+  abortSignal?: AbortSignal;
   onError?: (error: unknown) => void;
 }
 
@@ -49,6 +54,7 @@ export const streamWidget = ({
   prompt,
   today,
   model = WIDGET_MODEL,
+  abortSignal,
   onError,
 }: StreamWidgetOptions): Response => {
   const result = streamText({
@@ -56,6 +62,8 @@ export const streamWidget = ({
     system: buildWidgetSystemPrompt(today),
     prompt,
     output: Output.object({ schema: widgetResponseSchema }),
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
+    abortSignal,
     onError: ({ error }) => onError?.(error),
   });
 

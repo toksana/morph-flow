@@ -253,6 +253,26 @@ describe('WidgetGenerator', () => {
     expect(promptField()).toHaveValue(prompt);
   });
 
+  it('treats a stream cut off mid-card as a failure and puts the text back', async () => {
+    // Arrange
+    const prompt = faker.lorem.sentence();
+    const json = responseJson(buildTaskList({ tasks: buildTasks(3) }));
+    const stream = controlledResponse();
+    mockFetch(stream.response);
+    render(<WidgetGenerator />);
+    typePrompt(prompt);
+    clickGenerate();
+
+    // Act: the connection ends before the JSON is complete, still with status 200.
+    stream.push(json.slice(0, json.length / 2));
+    stream.close();
+
+    // Assert
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(promptField()).toHaveValue(prompt);
+    expect(await screen.findByRole('button', { name: 'Generate' })).toBeInTheDocument();
+  });
+
   it('keeps text typed during a request that then fails', async () => {
     // Arrange
     const typedLater = faker.lorem.sentence();

@@ -1,4 +1,5 @@
 import { useObject } from '@ai-sdk/react';
+import { useState } from 'react';
 
 import type { DeepPartial } from '@/core/widgets/deepPartial';
 import type { GenerateRequest } from '@/core/widgets/generate.request';
@@ -29,23 +30,45 @@ interface WidgetStreamOptions {
   onError?: () => void;
 }
 
-/** Streams one widget for a prompt, resolving relative dates in the user's time zone. */
+/**
+ * Streams one widget for a prompt, resolving relative dates in the user's time zone.
+ * A stream that ends with a half-written widget (status 200, JSON cut off) counts as a failure:
+ * `useObject` only reports it through `onFinish`, so it is tracked here.
+ */
 export const useWidgetStream = ({ onError }: WidgetStreamOptions = {}): WidgetStream => {
+  const [isIncomplete, setIsIncomplete] = useState(false);
   const { object, submit, stop, clear, isLoading, error } = useObject<
     typeof widgetResponseSchema,
     WidgetResponse,
     GenerateRequest
-  >({ api: GENERATE_ENDPOINT, schema: widgetResponseSchema, onError: () => onError?.() });
+  >({
+    api: GENERATE_ENDPOINT,
+    schema: widgetResponseSchema,
+    onError: () => onError?.(),
+    onFinish: ({ error: invalid }) => {
+      if (invalid === undefined) return;
+      setIsIncomplete(true);
+      onError?.();
+    },
+  });
+  // A cut-off card is dropped, as for any failed request, so no half-built card sits beside the error.
+  const widget = isIncomplete ? undefined : object?.widget;
 
   return {
     // `submit` clears the object first, so a new request unmounts the previous widget
     // and drops its local state (e.g. a check-in).
-    widget: object?.widget,
-    hasStarted: object !== undefined || isLoading,
+    widget,
+    hasStarted: (!isIncomplete && object !== undefined) || isLoading,
     isStreaming: isLoading,
-    hasError: error !== undefined,
-    generate: (prompt) => submit({ prompt, timeZone: currentTimeZone() }),
+    hasError: error !== undefined || isIncomplete,
+    generate: (prompt) => {
+      setIsIncomplete(false);
+      submit({ prompt, timeZone: currentTimeZone() });
+    },
     stop,
-    reset: clear,
+    reset: () => {
+      setIsIncomplete(false);
+      clear();
+    },
   };
 };

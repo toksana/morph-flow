@@ -3,23 +3,11 @@ import { describe, expect, it } from 'vitest';
 
 import { buildTask, buildTaskList, buildTasks } from '../test/factories/taskList.factory';
 
-import { MAX_TASKS, type TaskPriority } from './taskList.schema';
-import {
-  completeDueDate,
-  DEFAULT_PRIORITY,
-  sortByPriority,
-  toTaskListView,
-  type TaskView,
-} from './taskList.view';
+import { MAX_TASKS } from './taskList.schema';
+import { completeDueDate, DEFAULT_PRIORITY, toTaskListView } from './taskList.view';
 
 const RANDOM_RUNS = 50;
 const ISO_DATE_LENGTH = 'YYYY-MM-DD'.length;
-const PRIORITY_ORDER: TaskPriority[] = ['high', 'medium', 'low'];
-
-const buildTaskView = (overrides: Partial<TaskView> = {}): TaskView => {
-  const { due, ...task } = buildTask();
-  return { id: faker.string.uuid(), ...task, ...(due ? { due } : {}), ...overrides };
-};
 
 describe('completeDueDate', () => {
   it('keeps every complete ISO date as-is', () => {
@@ -57,30 +45,6 @@ describe('completeDueDate', () => {
       expect(result).toBeUndefined();
     },
   );
-});
-
-describe('sortByPriority', () => {
-  it('orders random tasks from high to low priority', () => {
-    // Arrange
-    const tasks = Array.from({ length: MAX_TASKS }, () => buildTaskView());
-
-    // Act
-    const ranks = sortByPriority(tasks).map((task) => PRIORITY_ORDER.indexOf(task.priority));
-
-    // Assert
-    expect(ranks).toEqual(ranks.toSorted((a, b) => a - b));
-  });
-
-  it('keeps the original order of tasks with equal priority', () => {
-    // Arrange
-    const tasks = Array.from({ length: 5 }, () => buildTaskView({ priority: 'medium' }));
-
-    // Act
-    const sorted = sortByPriority(tasks);
-
-    // Assert
-    expect(sorted.map((task) => task.id)).toEqual(tasks.map((task) => task.id));
-  });
 });
 
 describe('toTaskListView', () => {
@@ -144,7 +108,7 @@ describe('toTaskListView', () => {
     expect(view.tasks.map((task) => task.title)).toEqual([title]);
   });
 
-  it('keys every task by its streamed position, not by its sorted position', () => {
+  it('keeps the streamed order whatever the priorities, keyed by streamed position', () => {
     // Arrange
     const tasks = [
       buildTask({ priority: 'low' }),
@@ -157,9 +121,9 @@ describe('toTaskListView', () => {
 
     // Assert
     expect(view.tasks.map((task) => [task.id, task.title])).toEqual([
+      ['task-0', tasks[0].title],
       ['task-1', tasks[1].title],
       ['task-2', tasks[2].title],
-      ['task-0', tasks[0].title],
     ]);
   });
 
