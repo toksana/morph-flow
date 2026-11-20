@@ -1,12 +1,15 @@
+import { Terminal } from 'lucide-react';
 import { type FormEvent, type JSX, type KeyboardEvent, useId, useRef } from 'react';
 
 import { MAX_PROMPT_LENGTH } from '@/core/widgets/generate.request';
-import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useAdoptPreHydrationValue } from '@/hooks/useAdoptPreHydrationValue';
 
+import { PromptAction } from './PromptAction';
+
 export const PROMPT_LABEL = 'What do you want to create?';
-const PROMPT_PLACEHOLDER = 'e.g. Tasks for tomorrow, or a 30-day reading challenge';
+const PROMPT_PLACEHOLDER =
+  'Describe what you need, e.g. "tasks for tomorrow" or "a 30-day reading challenge"';
 
 interface PromptFormProps {
   value: string;
@@ -44,30 +47,27 @@ export const PromptForm = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-      <label htmlFor={promptId} className="text-sm font-medium">
+    <form onSubmit={handleSubmit}>
+      <label htmlFor={promptId} className="sr-only">
         {PROMPT_LABEL}
       </label>
-      <Textarea
-        id={promptId}
-        ref={textareaRef}
-        value={value}
-        onChange={(event) => onValueChange(event.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={PROMPT_PLACEHOLDER}
-        maxLength={MAX_PROMPT_LENGTH}
-        rows={3}
-      />
-      <div className="flex justify-end">
-        {isStreaming ? (
-          <Button type="button" variant="outline" onClick={onStop}>
-            Stop
-          </Button>
-        ) : (
-          <Button type="submit" disabled={!canSubmit}>
-            Generate
-          </Button>
-        )}
+      <div className="flex items-end gap-2 rounded-2xl border bg-card p-2 shadow-sm transition-shadow focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+        <Terminal
+          aria-hidden
+          className="mt-3 ml-2 size-4 shrink-0 self-start text-muted-foreground"
+        />
+        <Textarea
+          id={promptId}
+          ref={textareaRef}
+          value={value}
+          onChange={(event) => onValueChange(event.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={PROMPT_PLACEHOLDER}
+          maxLength={MAX_PROMPT_LENGTH}
+          rows={1}
+          className="min-h-24 max-h-60 flex-1 resize-none border-0 bg-transparent px-1 shadow-none focus-visible:ring-0 dark:bg-transparent"
+        />
+        <PromptAction isStreaming={isStreaming} canSubmit={canSubmit} onStop={onStop} />
       </div>
     </form>
   );

@@ -16,6 +16,12 @@ export const WidgetGenerator = (): JSX.Element => {
   const [prompt, setPrompt] = useState('');
   const stream = useWidgetStream();
 
+  // A preset runs at once; its text stays in the field so it can be edited and sent again.
+  const generateExample = (example: string): void => {
+    setPrompt(example);
+    stream.generate(example);
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <PromptForm
@@ -25,7 +31,7 @@ export const WidgetGenerator = (): JSX.Element => {
         onStop={stream.stop}
         isStreaming={stream.isStreaming}
       />
-      <PromptPresets onPick={setPrompt} disabled={stream.isStreaming} />
+      <PromptPresets onPick={generateExample} disabled={stream.isStreaming} />
       {stream.hasError && (
         <p role="alert" className="text-sm text-destructive">
           {ERROR_TEXT}

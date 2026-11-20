@@ -187,10 +187,11 @@ describe('WidgetGenerator', () => {
   });
 
   it.each(WIDGETS.map((widget) => [widget.type, widget.examplePrompt] as const))(
-    'fills the prompt with the %s example without sending it',
-    (_type, examplePrompt) => {
+    'sends the %s example at once and keeps it in the field',
+    async (_type, examplePrompt) => {
       // Arrange
-      const fetchMock = mockFetch();
+      const stream = controlledResponse();
+      const fetchMock = mockFetch(stream.response);
       render(<WidgetGenerator />);
       const presets = screen.getByRole('group', { name: PRESETS_LABEL });
 
@@ -198,8 +199,14 @@ describe('WidgetGenerator', () => {
       fireEvent.click(within(presets).getByRole('button', { name: examplePrompt }));
 
       // Assert
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+      expect(JSON.parse(String(init.body))).toMatchObject({ prompt: examplePrompt });
       expect(screen.getByLabelText(PROMPT_LABEL)).toHaveValue(examplePrompt);
-      expect(fetchMock).not.toHaveBeenCalled();
+      within(presets)
+        .getAllByRole('button')
+        .forEach((button) => expect(button).toBeDisabled());
+      stream.close();
     },
   );
 
