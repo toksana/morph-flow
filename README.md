@@ -118,3 +118,8 @@ Tests sit next to the code (`foo.ts` → `foo.test.ts`) and use `@faker-js/faker
 `src/core/test/factories`. The handler is tested with a mock language model
 (`src/server/test/mockLanguageModel.ts`), and the generator UI with a fetch stub that streams the
 response chunk by chunk. No test calls the real model.
+
+`pnpm test` runs Vitest. `pnpm test:e2e` runs Playwright (`e2e/`) against a production build on
+port 3100. It points the browser at a local mock that streams the response chunk by chunk, so it
+checks the card building up, finishing, and being dropped by **New** without calling the model.
+The first run needs a browser: `pnpm exec playwright install chromium`.
