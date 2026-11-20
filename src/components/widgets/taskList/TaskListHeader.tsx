@@ -1,4 +1,3 @@
-import { ListChecks } from 'lucide-react';
 import type { JSX } from 'react';
 
 import type { TaskListView } from '@/core/widgets/taskList.view';
@@ -18,9 +17,7 @@ interface TaskListHeaderProps {
  */
 export const TaskListHeader = ({ view }: TaskListHeaderProps): JSX.Element => (
   <CardHeader className="flex items-center gap-3">
-    <WidgetIconTile className="border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400">
-      <ListChecks className="size-5" />
-    </WidgetIconTile>
+    <WidgetIconTile type="TaskList" />
     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
       <CardDescription className="font-mono text-xs tracking-widest uppercase">
         {TASK_LIST_LABEL}

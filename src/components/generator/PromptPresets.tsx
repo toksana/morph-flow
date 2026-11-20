@@ -2,8 +2,7 @@ import { type JSX, useId } from 'react';
 
 import { WIDGETS } from '@/core/widgets/widget.schema';
 import { Button } from '@/components/ui/button';
-
-import { WIDGET_ICONS } from './widgetIcons';
+import { WIDGET_ACCENTS } from '@/components/widgets/widgetAccents';
 
 export const PRESETS_LABEL = 'Or try an example';
 
@@ -13,7 +12,7 @@ interface PromptPresetsProps {
   disabled: boolean;
 }
 
-/** One example per registered widget, taken from its definition and marked with its icon. */
+/** One example per registered widget, taken from its definition and marked with its icon and hue. */
 export const PromptPresets = ({ onPick, disabled }: PromptPresetsProps): JSX.Element => {
   const labelId = useId();
 
@@ -24,7 +23,7 @@ export const PromptPresets = ({ onPick, disabled }: PromptPresetsProps): JSX.Ele
       </p>
       <div role="group" aria-labelledby={labelId} className="flex flex-col items-center gap-2">
         {WIDGETS.map(({ type, examplePrompt }) => {
-          const Icon = WIDGET_ICONS[type];
+          const { icon: Icon, iconClass } = WIDGET_ACCENTS[type];
           return (
             <Button
               key={type}
@@ -34,7 +33,7 @@ export const PromptPresets = ({ onPick, disabled }: PromptPresetsProps): JSX.Ele
               disabled={disabled}
               onClick={() => onPick(examplePrompt)}
             >
-              <Icon aria-hidden className="text-muted-foreground" />
+              <Icon aria-hidden className={iconClass} />
               {examplePrompt}
             </Button>
           );

@@ -1,4 +1,4 @@
-import { Flame, Target } from 'lucide-react';
+import { Target } from 'lucide-react';
 import type { JSX } from 'react';
 
 import type { HabitStreakView } from '@/core/widgets/habitStreakCard.view';
@@ -19,9 +19,7 @@ interface HabitStreakHeaderProps {
  */
 export const HabitStreakHeader = ({ view }: HabitStreakHeaderProps): JSX.Element => (
   <CardHeader className="flex items-center gap-3">
-    <WidgetIconTile className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
-      {view.emoji ?? <Flame className="size-5" />}
-    </WidgetIconTile>
+    <WidgetIconTile type="HabitStreakCard">{view.emoji}</WidgetIconTile>
     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
       <CardDescription className="font-mono text-xs tracking-widest uppercase">
         {CARD_LABEL}
