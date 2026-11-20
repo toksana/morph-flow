@@ -59,7 +59,13 @@ export const PromptForm = ({
         {PROMPT_LABEL}
       </label>
       {/* Translucent with a blur, so cards scrolling under the dock stay faintly visible. */}
-      <div className="flex items-end gap-2 rounded-2xl border bg-card/85 p-2 shadow-sm backdrop-blur-md transition-shadow focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+      <div
+        className={cn(
+          'flex items-end gap-2 rounded-2xl border bg-card/85 p-2 shadow-sm backdrop-blur-md transition-shadow focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50',
+          // On a phone the docked field is two lines tall: centre the buttons beside it.
+          isDocked && 'max-sm:items-center',
+        )}
+      >
         {leading ?? (
           <Terminal
             aria-hidden
