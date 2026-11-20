@@ -20,6 +20,8 @@ export interface WidgetStream {
   hasError: boolean;
   generate: (prompt: string) => void;
   stop: () => void;
+  /** Stops any request and drops the widget and error, back to the empty state. */
+  reset: () => void;
 }
 
 interface WidgetStreamOptions {
@@ -29,7 +31,7 @@ interface WidgetStreamOptions {
 
 /** Streams one widget for a prompt, resolving relative dates in the user's time zone. */
 export const useWidgetStream = ({ onError }: WidgetStreamOptions = {}): WidgetStream => {
-  const { object, submit, stop, isLoading, error } = useObject<
+  const { object, submit, stop, clear, isLoading, error } = useObject<
     typeof widgetResponseSchema,
     WidgetResponse,
     GenerateRequest
@@ -44,5 +46,6 @@ export const useWidgetStream = ({ onError }: WidgetStreamOptions = {}): WidgetSt
     hasError: error !== undefined,
     generate: (prompt) => submit({ prompt, timeZone: currentTimeZone() }),
     stop,
+    reset: clear,
   };
 };
