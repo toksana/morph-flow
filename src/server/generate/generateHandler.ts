@@ -1,13 +1,13 @@
 import type { LanguageModel } from 'ai';
 
 import { formatPromptDate } from '@/core/widgets/promptDate';
-import { taskListRequestSchema } from '@/core/widgets/taskList.request';
+import { generateRequestSchema } from '@/core/widgets/generate.request';
 
-import { streamTaskList } from './streamTaskList';
+import { streamWidget } from './streamWidget';
 
 const INVALID_REQUEST_STATUS = 400;
 
-interface TaskListHandlerDeps {
+interface GenerateHandlerDeps {
   /** Defaults to the AI Gateway model; tests pass a mock. */
   model?: LanguageModel;
   /** Clock for "today" in the prompt; injected so tests are deterministic. */
@@ -25,22 +25,22 @@ const readJson = async (request: Request): Promise<unknown> => {
 
 const logStreamError = (error: unknown): void => {
   if (error instanceof Error) {
-    console.error('[task-list] stream failed:', error.message);
+    console.error('[generate] stream failed:', error.message);
     return;
   }
-  console.error('[task-list] stream failed with a non-Error value:', error);
+  console.error('[generate] stream failed with a non-Error value:', error);
 };
 
-/** Builds the POST handler: validate the body, then stream a TaskList for the user's day. */
-export const createTaskListHandler =
-  ({ model, now = () => new Date() }: TaskListHandlerDeps = {}) =>
+/** Builds the POST handler: validate the body, then stream a widget for the user's day. */
+export const createGenerateHandler =
+  ({ model, now = () => new Date() }: GenerateHandlerDeps = {}) =>
   async (request: Request): Promise<Response> => {
-    const parsed = taskListRequestSchema.safeParse(await readJson(request));
+    const parsed = generateRequestSchema.safeParse(await readJson(request));
     if (!parsed.success) {
       return Response.json({ error: 'Invalid request' }, { status: INVALID_REQUEST_STATUS });
     }
     const { prompt, timeZone } = parsed.data;
-    return streamTaskList({
+    return streamWidget({
       prompt,
       today: formatPromptDate(now(), timeZone),
       model,

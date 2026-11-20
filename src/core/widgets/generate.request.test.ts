@@ -1,7 +1,7 @@
 import { faker } from '@faker-js/faker';
 import { describe, expect, it } from 'vitest';
 
-import { MAX_PROMPT_LENGTH, taskListRequestSchema } from './taskList.request';
+import { MAX_PROMPT_LENGTH, generateRequestSchema } from './generate.request';
 
 const RANDOM_RUNS = 50;
 const TIME_ZONES = ['UTC', 'Europe/Berlin', 'America/New_York', 'Asia/Tokyo'];
@@ -12,7 +12,7 @@ const buildRequest = (overrides: Record<string, unknown> = {}): Record<string, u
   ...overrides,
 });
 
-describe('taskListRequestSchema', () => {
+describe('generateRequestSchema', () => {
   it('accepts random prompts within the length limit', () => {
     // Arrange
     const requests = Array.from({ length: RANDOM_RUNS }, () =>
@@ -20,7 +20,7 @@ describe('taskListRequestSchema', () => {
     );
 
     // Act
-    const results = requests.map((request) => taskListRequestSchema.safeParse(request));
+    const results = requests.map((request) => generateRequestSchema.safeParse(request));
 
     // Assert
     results.forEach((result) => expect(result.success).toBe(true));
@@ -31,7 +31,7 @@ describe('taskListRequestSchema', () => {
     const request = buildRequest();
 
     // Act
-    const result = taskListRequestSchema.parse({ ...request, prompt: `  ${request.prompt}\n` });
+    const result = generateRequestSchema.parse({ ...request, prompt: `  ${request.prompt}\n` });
 
     // Assert
     expect(result).toEqual(request);
@@ -48,7 +48,7 @@ describe('taskListRequestSchema', () => {
     ['overlong time zone', { timeZone: `Europe/${'a'.repeat(64)}` }],
   ])('rejects a %s', (_case, overrides) => {
     // Act
-    const result = taskListRequestSchema.safeParse(buildRequest(overrides));
+    const result = generateRequestSchema.safeParse(buildRequest(overrides));
 
     // Assert
     expect(result.success).toBe(false);
@@ -56,7 +56,7 @@ describe('taskListRequestSchema', () => {
 
   it('rejects a non-object body', () => {
     // Act
-    const result = taskListRequestSchema.safeParse('plan my day');
+    const result = generateRequestSchema.safeParse('plan my day');
 
     // Assert
     expect(result.success).toBe(false);
@@ -64,7 +64,7 @@ describe('taskListRequestSchema', () => {
 
   it('accepts a prompt exactly at the length limit', () => {
     // Act
-    const result = taskListRequestSchema.safeParse(
+    const result = generateRequestSchema.safeParse(
       buildRequest({ prompt: 'a'.repeat(MAX_PROMPT_LENGTH) }),
     );
 

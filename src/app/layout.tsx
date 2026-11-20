@@ -14,7 +14,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'Morph Flow',
-  description: 'Turn a plain-language request into a streamed, actionable task list.',
+  description:
+    'Describe your day in plain language and watch your interface build itself — instant task lists, habit trackers, and schedules with zero clutter.',
 };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {

@@ -1,14 +1,14 @@
 import { type FormEvent, type JSX, type KeyboardEvent, useId, useRef } from 'react';
 
-import { MAX_PROMPT_LENGTH } from '@/core/widgets/taskList.request';
+import { MAX_PROMPT_LENGTH } from '@/core/widgets/generate.request';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useAdoptPreHydrationValue } from '@/hooks/useAdoptPreHydrationValue';
 
-const PROMPT_LABEL = 'What do you want to get done?';
-const PROMPT_PLACEHOLDER = "e.g. Call the garage tomorrow, book a doctor's appointment";
+export const PROMPT_LABEL = 'What do you want to create?';
+const PROMPT_PLACEHOLDER = 'e.g. Tasks for tomorrow, or a 30-day reading challenge';
 
-interface TaskPromptFormProps {
+interface PromptFormProps {
   value: string;
   onValueChange: (value: string) => void;
   onSubmit: () => void;
@@ -20,13 +20,13 @@ interface TaskPromptFormProps {
 const isSubmitKey = (event: KeyboardEvent<HTMLTextAreaElement>): boolean =>
   event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing;
 
-export const TaskPromptForm = ({
+export const PromptForm = ({
   value,
   onValueChange,
   onSubmit,
   onStop,
   isStreaming,
-}: TaskPromptFormProps): JSX.Element => {
+}: PromptFormProps): JSX.Element => {
   const promptId = useId();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   useAdoptPreHydrationValue(textareaRef, onValueChange);
