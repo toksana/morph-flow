@@ -3,12 +3,20 @@ import type { LanguageModel } from 'ai';
 import { formatPromptDate } from '@/core/widgets/promptDate';
 import { generateRequestSchema } from '@/core/widgets/generate.request';
 import { isPromptOverLimit, promptLimitFor } from '@/core/widgets/promptLimit';
+import { retryAfterSeconds } from '@/core/widgets/rateLimit';
 import type { UserIdentity } from '@/server/db/users';
+import {
+  type CheckRateLimit,
+  type RateLimitCaller,
+  type RateLimitVerdict,
+  clientIp,
+} from '@/server/rateLimit/caller';
 
 import { streamWidget } from './streamWidget';
 
 const INVALID_REQUEST_STATUS = 400;
 const PROMPT_TOO_LONG_STATUS = 413;
+const TOO_MANY_REQUESTS_STATUS = 429;
 
 interface GenerateHandlerDeps {
   /** Defaults to the AI Gateway model; tests pass a mock. */
@@ -19,10 +27,13 @@ interface GenerateHandlerDeps {
   identify?: () => Promise<string | null>;
   /** Stores the signed-in caller's row; skipped for guests. */
   saveUser?: (identity: UserIdentity) => Promise<void>;
+  /** Counts the request against the caller's hourly allowance. Defaults to no limit. */
+  checkRateLimit?: CheckRateLimit;
 }
 
 const guest = async (): Promise<null> => null;
 const skipSave = async (): Promise<void> => undefined;
+const noRateLimit: CheckRateLimit = async () => ({ success: true, limit: 0, reset: 0 });
 
 const readJson = async (request: Request): Promise<unknown> => {
   try {
@@ -56,13 +67,44 @@ const saveSignedInUser = async (
   }
 };
 
-/** Builds the POST handler: validate the body, apply the caller's prompt limit, then stream a widget. */
+/**
+ * The verdict when the caller is over their allowance, otherwise null. If the limiter itself
+ * fails (e.g. Redis is down), the request goes through: the site keeps working, and the prompt
+ * limit still caps what a single request can cost.
+ */
+const blockedVerdict = async (
+  checkRateLimit: CheckRateLimit,
+  caller: RateLimitCaller,
+): Promise<RateLimitVerdict | null> => {
+  try {
+    const verdict = await checkRateLimit(caller);
+    return verdict.success ? null : verdict;
+  } catch (error) {
+    logError('rate limit check failed', error);
+    return null;
+  }
+};
+
+const tooManyRequests = ({ limit, reset }: RateLimitVerdict, now: Date): Response =>
+  Response.json(
+    { error: 'Too many requests', limit, reset },
+    {
+      status: TOO_MANY_REQUESTS_STATUS,
+      headers: { 'Retry-After': String(retryAfterSeconds(reset, now.getTime())) },
+    },
+  );
+
+/**
+ * Builds the POST handler: validate the body, apply the caller's prompt limit and hourly allowance,
+ * then stream a widget. Rejected requests (400, 413) do not use up the allowance.
+ */
 export const createGenerateHandler =
   ({
     model,
     now = () => new Date(),
     identify = guest,
     saveUser = skipSave,
+    checkRateLimit = noRateLimit,
   }: GenerateHandlerDeps = {}) =>
   async (request: Request): Promise<Response> => {
     const parsed = generateRequestSchema.safeParse(await readJson(request));
@@ -75,6 +117,11 @@ export const createGenerateHandler =
     if (isPromptOverLimit(prompt, limit)) {
       return Response.json({ error: 'Prompt too long', limit }, { status: PROMPT_TOO_LONG_STATUS });
     }
+    const blocked = await blockedVerdict(checkRateLimit, {
+      clerkUserId,
+      ip: clientIp(request.headers),
+    });
+    if (blocked !== null) return tooManyRequests(blocked, now());
     if (clerkUserId !== null) await saveSignedInUser(saveUser, clerkUserId, timeZone);
     return streamWidget({
       prompt,
