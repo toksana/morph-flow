@@ -1,2 +1,2 @@
-// Drizzle tables live here; each slice adds one table and its migration.
-export {};
+// Every Drizzle table, for drizzle-kit and the typed client; one table per migration.
+export * from './tables/users';
