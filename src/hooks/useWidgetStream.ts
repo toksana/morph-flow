@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { DeepPartial } from '@/core/widgets/deepPartial';
 import type { GenerateRequest } from '@/core/widgets/generate.request';
 import { currentTimeZone } from '@/core/widgets/promptDate';
+import { minutesUntil, parseRateLimitBody } from '@/core/widgets/rateLimit';
 import {
   type Widget,
   type WidgetResponse,
@@ -19,6 +20,8 @@ export interface WidgetStream {
   hasStarted: boolean;
   isStreaming: boolean;
   hasError: boolean;
+  /** Set when the request failed for the hourly limit: whole minutes until it resets. */
+  retryInMinutes: number | null;
   generate: (prompt: string) => void;
   stop: () => void;
   /** Stops any request and drops the widget and error, back to the empty state. */
@@ -37,6 +40,7 @@ interface WidgetStreamOptions {
  */
 export const useWidgetStream = ({ onError }: WidgetStreamOptions = {}): WidgetStream => {
   const [isIncomplete, setIsIncomplete] = useState(false);
+  const [retryInMinutes, setRetryInMinutes] = useState<number | null>(null);
   const { object, submit, stop, clear, isLoading, error } = useObject<
     typeof widgetResponseSchema,
     WidgetResponse,
@@ -44,7 +48,12 @@ export const useWidgetStream = ({ onError }: WidgetStreamOptions = {}): WidgetSt
   >({
     api: GENERATE_ENDPOINT,
     schema: widgetResponseSchema,
-    onError: () => onError?.(),
+    // A failed response's body arrives as the error message; a 429 carries the reset time.
+    onError: (failure) => {
+      const rateLimit = parseRateLimitBody(failure.message);
+      setRetryInMinutes(rateLimit === null ? null : minutesUntil(rateLimit.reset, Date.now()));
+      onError?.();
+    },
     onFinish: ({ error: invalid }) => {
       if (invalid === undefined) return;
       setIsIncomplete(true);
@@ -61,13 +70,16 @@ export const useWidgetStream = ({ onError }: WidgetStreamOptions = {}): WidgetSt
     hasStarted: (!isIncomplete && object !== undefined) || isLoading,
     isStreaming: isLoading,
     hasError: error !== undefined || isIncomplete,
+    retryInMinutes,
     generate: (prompt) => {
       setIsIncomplete(false);
+      setRetryInMinutes(null);
       submit({ prompt, timeZone: currentTimeZone() });
     },
     stop,
     reset: () => {
       setIsIncomplete(false);
+      setRetryInMinutes(null);
       clear();
     },
   };
