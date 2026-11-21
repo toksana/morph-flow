@@ -3,6 +3,7 @@
 import { type JSX, type ReactNode, ViewTransition } from 'react';
 
 import { useGeneratorSession } from '@/hooks/useGeneratorSession';
+import { usePromptLimit } from '@/hooks/usePromptLimit';
 import { cn } from '@/lib/utils';
 
 import { NewCardButton } from './NewCardButton';
@@ -20,6 +21,7 @@ export const NEXT_PLACEHOLDER = 'Describe another card — a new task list or ha
 
 // The dock floats over the canvas, so the canvas leaves room for it below the last card.
 const DOCK_CLASS = 'fixed inset-x-4 bottom-6 z-10 mx-auto max-w-2xl rounded-2xl shadow-lg';
+const CANVAS_DOCK_ROOM_CLASS = 'pb-48';
 
 interface WidgetGeneratorProps {
   /** Start-screen content above the field (e.g. the hero); hidden once a card is requested. */
@@ -33,10 +35,11 @@ interface WidgetGeneratorProps {
  */
 export const WidgetGenerator = ({ intro }: WidgetGeneratorProps): JSX.Element => {
   const { prompt, setPrompt, isOnCanvas, send, startNew, stream } = useGeneratorSession();
+  const { limit, isSignedIn } = usePromptLimit();
 
   return (
     <div
-      className={cn('flex flex-1 flex-col gap-10 py-16', isOnCanvas ? 'pb-32' : 'justify-center')}
+      className={cn('flex flex-1 flex-col gap-10 py-16', isOnCanvas ? CANVAS_DOCK_ROOM_CLASS : 'justify-center')}
     >
       {!isOnCanvas && intro}
       {isOnCanvas && (
@@ -62,6 +65,8 @@ export const WidgetGenerator = ({ intro }: WidgetGeneratorProps): JSX.Element =>
             onSubmit={() => send(prompt)}
             onStop={stream.stop}
             isStreaming={stream.isStreaming}
+            limit={limit}
+            isSignedIn={isSignedIn}
           />
         </div>
       </ViewTransition>

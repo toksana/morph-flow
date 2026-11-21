@@ -19,6 +19,12 @@ import { WIDGET_SKELETON_LABEL } from './WidgetSkeleton';
 // Not UTC and not the machine's zone, so a hard-coded or server-side zone cannot pass.
 const USER_TIME_ZONE = 'Pacific/Kiritimati';
 
+// Clerk needs its provider; the generator only cares about the resulting limit.
+vi.mock('@/hooks/usePromptLimit', async () => {
+  const { GUEST_PROMPT_LIMIT } = await import('@/core/constants');
+  return { usePromptLimit: () => ({ limit: GUEST_PROMPT_LIMIT, isSignedIn: false }) };
+});
+
 vi.mock('@/core/widgets/promptDate', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/core/widgets/promptDate')>()),
   currentTimeZone: () => USER_TIME_ZONE,
