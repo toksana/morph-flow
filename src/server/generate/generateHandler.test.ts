@@ -157,4 +157,82 @@ describe('createGenerateHandler', () => {
     expect(text).toBe('');
     expect(consoleError).toHaveBeenCalledWith('[generate] stream failed:', message);
   });
+
+  describe('signed-in user', () => {
+    const buildClerkUserId = (): string => `user_${faker.string.alphanumeric(24)}`;
+    const streamingModel = () => mockStreamingModel([JSON.stringify(buildRandomResponse())]);
+
+    it("saves the caller with the request's time zone", async () => {
+      // Arrange
+      const clerkUserId = buildClerkUserId();
+      const timeZone = faker.helpers.arrayElement(['Asia/Tokyo', 'America/New_York', 'Asia/Kolkata']);
+      const saveUser = vi.fn(async () => undefined);
+      const handler = createGenerateHandler({
+        model: streamingModel(),
+        identify: async () => clerkUserId,
+        saveUser,
+      });
+
+      // Act
+      const response = await handler(postPrompt(faker.lorem.sentence(), timeZone));
+      await response.text();
+
+      // Assert
+      expect(saveUser).toHaveBeenCalledExactlyOnceWith({ clerkUserId, timeZone });
+    });
+
+    it('does not save a guest', async () => {
+      // Arrange
+      const saveUser = vi.fn(async () => undefined);
+      const handler = createGenerateHandler({
+        model: streamingModel(),
+        identify: async () => null,
+        saveUser,
+      });
+
+      // Act
+      const response = await handler(postPrompt(faker.lorem.sentence()));
+      await response.text();
+
+      // Assert
+      expect(response.status).toBe(200);
+      expect(saveUser).not.toHaveBeenCalled();
+    });
+
+    it('does not identify the caller when the request is invalid', async () => {
+      // Arrange
+      const identify = vi.fn(async () => buildClerkUserId());
+      const handler = createGenerateHandler({ model: streamingModel(), identify });
+
+      // Act
+      const response = await handler(postJson('not json'));
+
+      // Assert
+      expect(response.status).toBe(400);
+      expect(identify).not.toHaveBeenCalled();
+    });
+
+    it('still streams the widget when saving the user fails', async () => {
+      // Arrange
+      const message = faker.lorem.sentence();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const widget = buildRandomResponse();
+      const handler = createGenerateHandler({
+        model: mockStreamingModel([JSON.stringify(widget)]),
+        identify: async () => buildClerkUserId(),
+        saveUser: async () => {
+          throw new Error(message);
+        },
+      });
+
+      // Act
+      const response = await handler(postPrompt(faker.lorem.sentence()));
+      const text = await response.text();
+
+      // Assert
+      expect(response.status).toBe(200);
+      expect(widgetResponseSchema.parse(JSON.parse(text))).toEqual(widget);
+      expect(consoleError).toHaveBeenCalledWith('[generate] saving the user failed:', message);
+    });
+  });
 });
