@@ -2,7 +2,13 @@ import { faker } from '@faker-js/faker';
 import { describe, expect, it } from 'vitest';
 
 import { GUEST_HOURLY_GENERATIONS, USER_HOURLY_GENERATIONS } from '../constants';
-import { hourlyGenerationsFor, minutesUntil, retryAfterSeconds } from './rateLimit';
+import {
+  TOO_MANY_REQUESTS_ERROR,
+  hourlyGenerationsFor,
+  minutesUntil,
+  parseRateLimitBody,
+  retryAfterSeconds,
+} from './rateLimit';
 
 const RANDOM_RUNS = 50;
 const HOUR_MS = 60 * 60 * 1000;
@@ -82,5 +88,42 @@ describe('minutesUntil', () => {
     expect(oneMs).toBe(1);
     expect(exactlyOneMinute).toBe(1);
     expect(past).toBe(1);
+  });
+});
+
+describe('parseRateLimitBody', () => {
+  const buildBody = () => ({
+    error: TOO_MANY_REQUESTS_ERROR,
+    limit: faker.number.int({ min: 1, max: 50 }),
+    reset: pickNow(),
+  });
+
+  it('reads the limit and reset time from a 429 body', () => {
+    // Arrange
+    const body = buildBody();
+
+    // Act
+    const parsed = parseRateLimitBody(JSON.stringify(body));
+
+    // Assert
+    expect(parsed).toEqual(body);
+  });
+
+  it('returns null for other failures: another error, a missing field, plain text, empty', () => {
+    // Arrange
+    const { reset, ...withoutReset } = buildBody();
+    const texts = [
+      JSON.stringify({ ...buildBody(), error: 'Prompt too long' }),
+      JSON.stringify(withoutReset),
+      JSON.stringify({ ...buildBody(), reset: String(reset) }),
+      faker.lorem.sentence(),
+      '',
+    ];
+
+    // Act
+    const parsed = texts.map(parseRateLimitBody);
+
+    // Assert
+    expect(parsed).toEqual(texts.map(() => null));
   });
 });

@@ -5,10 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { GUEST_PROMPT_LIMIT, USER_PROMPT_LIMIT } from '@/core/constants';
 import { COUNTER_VISIBLE_RATIO } from '@/core/widgets/promptLimit';
+import { SIGN_IN_TEXT } from '@/components/auth/SignInLink';
 
 import { GENERATE_LABEL } from './PromptAction';
 import { PROMPT_LABEL, PromptForm } from './PromptForm';
-import { SIGN_IN_TEXT, guestLimitText, userLimitText } from './PromptLimitNotice';
+import { guestLimitText, userLimitText } from './PromptLimitNotice';
 
 // The real button needs <ClerkProvider>; here it only has to render its trigger.
 vi.mock('@clerk/nextjs', () => ({

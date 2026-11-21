@@ -3,7 +3,11 @@ import type { LanguageModel } from 'ai';
 import { formatPromptDate } from '@/core/widgets/promptDate';
 import { generateRequestSchema } from '@/core/widgets/generate.request';
 import { isPromptOverLimit, promptLimitFor } from '@/core/widgets/promptLimit';
-import { retryAfterSeconds } from '@/core/widgets/rateLimit';
+import {
+  TOO_MANY_REQUESTS_ERROR,
+  type RateLimitBody,
+  retryAfterSeconds,
+} from '@/core/widgets/rateLimit';
 import type { UserIdentity } from '@/server/db/users';
 import {
   type CheckRateLimit,
@@ -86,13 +90,10 @@ const blockedVerdict = async (
 };
 
 const tooManyRequests = ({ limit, reset }: RateLimitVerdict, now: Date): Response =>
-  Response.json(
-    { error: 'Too many requests', limit, reset },
-    {
-      status: TOO_MANY_REQUESTS_STATUS,
-      headers: { 'Retry-After': String(retryAfterSeconds(reset, now.getTime())) },
-    },
-  );
+  Response.json({ error: TOO_MANY_REQUESTS_ERROR, limit, reset } satisfies RateLimitBody, {
+    status: TOO_MANY_REQUESTS_STATUS,
+    headers: { 'Retry-After': String(retryAfterSeconds(reset, now.getTime())) },
+  });
 
 /**
  * Builds the POST handler: validate the body, apply the caller's prompt limit and hourly allowance,

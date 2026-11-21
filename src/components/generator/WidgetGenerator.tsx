@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 
 import { NewCardButton } from './NewCardButton';
 import { PromptForm } from './PromptForm';
+import { RateLimitNotice } from './RateLimitNotice';
 import { PromptPresets } from './PromptPresets';
 import { WidgetRenderer } from './WidgetRenderer';
 
@@ -42,16 +43,22 @@ export const WidgetGenerator = ({ intro }: WidgetGeneratorProps): JSX.Element =>
 
   return (
     <div
-      className={cn('flex flex-1 flex-col gap-10 py-16', isOnCanvas ? CANVAS_DOCK_ROOM_CLASS : 'justify-center')}
+      className={cn(
+        'flex flex-1 flex-col gap-10 py-16',
+        isOnCanvas ? CANVAS_DOCK_ROOM_CLASS : 'justify-center',
+      )}
     >
       {!isOnCanvas && intro}
       {isOnCanvas && (
         <section className="flex flex-col gap-4">
-          {stream.hasError && (
-            <p role="alert" className="text-sm text-destructive">
-              {ERROR_TEXT}
-            </p>
-          )}
+          {stream.hasError &&
+            (stream.retryInMinutes === null ? (
+              <p role="alert" className="text-sm text-destructive">
+                {ERROR_TEXT}
+              </p>
+            ) : (
+              <RateLimitNotice minutes={stream.retryInMinutes} isSignedIn={isSignedIn} />
+            ))}
           {stream.hasStarted && (
             <WidgetRenderer widget={stream.widget} isStreaming={stream.isStreaming} />
           )}

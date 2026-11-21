@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import { GUEST_HOURLY_GENERATIONS, USER_HOURLY_GENERATIONS } from '../constants';
 
 const MS_PER_SECOND = 1000;
@@ -14,3 +16,25 @@ export const retryAfterSeconds = (resetAt: number, now: number): number =>
 /** Whole minutes until `resetAt` for "try again in N min"; rounded up and at least 1. */
 export const minutesUntil = (resetAt: number, now: number): number =>
   Math.max(1, Math.ceil((resetAt - now) / MS_PER_MINUTE));
+
+export const TOO_MANY_REQUESTS_ERROR = 'Too many requests';
+
+/** Body of the API's 429 answer; `reset` is a Unix timestamp in milliseconds. */
+export const rateLimitBodySchema = z.object({
+  error: z.literal(TOO_MANY_REQUESTS_ERROR),
+  limit: z.number().int().positive(),
+  reset: z.number().int(),
+});
+
+export type RateLimitBody = z.infer<typeof rateLimitBodySchema>;
+
+/** The 429 body from a failed response's text, or null for any other failure. */
+export const parseRateLimitBody = (text: string): RateLimitBody | null => {
+  try {
+    const parsed = rateLimitBodySchema.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data : null;
+  } catch (error) {
+    if (error instanceof SyntaxError) return null;
+    throw error;
+  }
+};

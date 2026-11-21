@@ -1,9 +1,6 @@
-import { SignInButton } from '@clerk/nextjs';
 import type { JSX } from 'react';
 
-import { Button } from '@/components/ui/button';
-
-export const SIGN_IN_TEXT = 'Sign in';
+import { SignInLink } from '@/components/auth/SignInLink';
 
 const countFormat = new Intl.NumberFormat('en-US');
 
@@ -33,11 +30,7 @@ export const PromptLimitNotice = ({ limit, isSignedIn }: PromptLimitNoticeProps)
     ) : (
       <>
         {guestLimitText(limit)}
-        <SignInButton mode="modal">
-          <Button type="button" variant="link" size="xs" className="h-auto px-0">
-            {SIGN_IN_TEXT}
-          </Button>
-        </SignInButton>
+        <SignInLink />
       </>
     )}
   </p>

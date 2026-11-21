@@ -1,18 +1,20 @@
 import { faker } from '@faker-js/faker';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { act } from 'react';
+import { type ReactNode, act } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildHabitStreakCard } from '@/core/test/factories/habitStreakCard.factory';
 import { buildTaskList, buildTasks } from '@/core/test/factories/taskList.factory';
+import { TOO_MANY_REQUESTS_ERROR } from '@/core/widgets/rateLimit';
 import { WIDGETS } from '@/core/widgets/widget.schema';
 import { CHECK_IN_TEXT, UNDO_TEXT } from '@/components/widgets/habitStreakCard/CheckInButton';
 
 import { NEW_CARD_LABEL } from './NewCardButton';
 import { PROMPT_LABEL } from './PromptForm';
 import { PRESETS_LABEL } from './PromptPresets';
+import { SIGN_IN_FOR_MORE_TEXT, rateLimitText } from './RateLimitNotice';
 import { NEXT_PLACEHOLDER, START_PLACEHOLDER, WidgetGenerator } from './WidgetGenerator';
 import { WIDGET_SKELETON_LABEL } from './WidgetSkeleton';
 
@@ -25,6 +27,11 @@ vi.mock('@/hooks/usePromptLimit', async () => {
   return { usePromptLimit: () => ({ limit: GUEST_PROMPT_LIMIT, isSignedIn: false }) };
 });
 
+// The real button needs <ClerkProvider>; here it only has to render its trigger.
+vi.mock('@clerk/nextjs', () => ({
+  SignInButton: ({ children }: { children: ReactNode }) => children,
+}));
+
 vi.mock('@/core/widgets/promptDate', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/core/widgets/promptDate')>()),
   currentTimeZone: () => USER_TIME_ZONE,
@@ -32,6 +39,8 @@ vi.mock('@/core/widgets/promptDate', async (importOriginal) => ({
 
 const HTTP_OK = 200;
 const HTTP_SERVER_ERROR = 500;
+const HTTP_TOO_MANY_REQUESTS = 429;
+const MS_PER_MINUTE = 60_000;
 
 /** A streaming response the test feeds chunk by chunk, like a model would. */
 const controlledResponse = () => {
@@ -374,6 +383,69 @@ describe('WidgetGenerator', () => {
     expect(screen.queryByText(/upstream detail/)).toBeNull();
     expect(screen.queryByText('No tasks yet')).toBeNull();
     expect(screen.queryByLabelText(WIDGET_SKELETON_LABEL)).toBeNull();
+  });
+
+  it('says when to retry after the hourly limit, offers a guest sign-in and keeps the text', async () => {
+    // Arrange
+    const prompt = faker.lorem.sentence();
+    const minutes = faker.number.int({ min: 1, max: 60 });
+    // A second short of the full minutes, so the time the test takes cannot round it up.
+    const reset = Date.now() + minutes * MS_PER_MINUTE - 1000;
+    const body = { error: TOO_MANY_REQUESTS_ERROR, limit: 10, reset };
+    mockFetch(Response.json(body, { status: HTTP_TOO_MANY_REQUESTS }));
+    render(<WidgetGenerator />);
+    typePrompt(prompt);
+
+    // Act
+    clickGenerate();
+
+    // Assert
+    expect(await screen.findByRole('alert')).toHaveTextContent(rateLimitText(minutes));
+    expect(screen.getByRole('button', { name: SIGN_IN_FOR_MORE_TEXT })).toBeInTheDocument();
+    expect(promptField()).toHaveValue(prompt);
+  });
+
+  it('drops the limit notice when the next request goes through', async () => {
+    // Arrange
+    const body = { error: TOO_MANY_REQUESTS_ERROR, limit: 10, reset: Date.now() + MS_PER_MINUTE };
+    const next = controlledResponse();
+    mockFetch(Response.json(body, { status: HTTP_TOO_MANY_REQUESTS }), next.response);
+    render(<WidgetGenerator />);
+    typePrompt(faker.lorem.sentence());
+    clickGenerate();
+    await screen.findByRole('alert');
+
+    // Act
+    clickGenerate();
+
+    // Assert
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(screen.queryByRole('button', { name: SIGN_IN_FOR_MORE_TEXT })).toBeNull();
+  });
+
+  it('shows the generic error, not a stale limit notice, when the next stream is cut off', async () => {
+    // Arrange
+    const body = { error: TOO_MANY_REQUESTS_ERROR, limit: 10, reset: Date.now() + MS_PER_MINUTE };
+    const json = responseJson(buildTaskList({ tasks: buildTasks(3) }));
+    const next = controlledResponse();
+    mockFetch(Response.json(body, { status: HTTP_TOO_MANY_REQUESTS }), next.response);
+    render(<WidgetGenerator />);
+    typePrompt(faker.lorem.sentence());
+    clickGenerate();
+    await screen.findByRole('alert');
+    clickGenerate();
+
+    // Act: the retry goes through, then its connection ends mid-card.
+    next.push(cutInsideFirstTask(json));
+    next.close();
+
+    // Assert
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Something went wrong. Please try again.',
+      ),
+    );
+    expect(screen.queryByRole('button', { name: SIGN_IN_FOR_MORE_TEXT })).toBeNull();
   });
 
   it.each([[''], ['   \n']])('keeps Generate disabled for prompt %j', (prompt) => {
