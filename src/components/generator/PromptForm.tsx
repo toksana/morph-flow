@@ -75,7 +75,10 @@ export const PromptForm = ({
           The field sits on top and a toolbar below it, so the text never runs under the
           counter or the buttons. */}
       <div className="flex flex-col rounded-2xl border bg-card/85 p-2 shadow-sm backdrop-blur-md transition-shadow focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
-        <div className="flex items-start gap-2">
+        {/* `field-sizing: content` also sizes the width to the longest line, and flex items do
+            not shrink below their content by default: `min-w-0` keeps an unbroken word from
+            stretching the field, so the text wraps instead. */}
+        <div className="flex min-w-0 items-start gap-2">
           <Terminal aria-hidden className="mt-3 ml-2 size-4 shrink-0 text-muted-foreground" />
           {/* The field grows with its text up to a ceiling, then scrolls inside. The ceiling is
               lower on a phone, where the on-screen keyboard already takes half the screen.
@@ -94,7 +97,7 @@ export const PromptForm = ({
             aria-invalid={isOverLimit}
             aria-describedby={tone === 'hidden' ? undefined : counterId}
             className={cn(
-              'max-h-32 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-1 shadow-none focus-visible:ring-0 aria-invalid:ring-0 md:max-h-48 dark:bg-transparent',
+              'max-h-32 min-w-0 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-1 shadow-none focus-visible:ring-0 aria-invalid:ring-0 md:max-h-48 dark:bg-transparent',
               isDocked ? 'min-h-16 sm:min-h-10 md:min-h-9' : 'min-h-24',
             )}
           />
