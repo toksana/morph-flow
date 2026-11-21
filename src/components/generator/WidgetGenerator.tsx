@@ -19,9 +19,12 @@ export const START_PLACEHOLDER =
 // Each request builds a new card with no memory of the last one, so this does not promise follow-ups.
 export const NEXT_PLACEHOLDER = 'Describe another card — a new task list or habit…';
 
-// The dock floats over the canvas, so the canvas leaves room for it below the last card.
-const DOCK_CLASS = 'fixed inset-x-4 bottom-6 z-10 mx-auto max-w-2xl rounded-2xl shadow-lg';
-const CANVAS_DOCK_ROOM_CLASS = 'pb-48';
+// The dock floats over the canvas, so the canvas leaves room for it below the last card. Both
+// add the iPhone home-indicator inset (0 elsewhere), so the dock never sits on the swipe bar.
+// An offset rather than padding: padding would show as an empty strip inside the dock's shadow.
+const DOCK_CLASS =
+  'fixed inset-x-4 bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-10 mx-auto max-w-2xl rounded-2xl shadow-lg';
+const CANVAS_DOCK_ROOM_CLASS = 'pb-[calc(12rem+env(safe-area-inset-bottom))]';
 
 interface WidgetGeneratorProps {
   /** Start-screen content above the field (e.g. the hero); hidden once a card is requested. */

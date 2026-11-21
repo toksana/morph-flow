@@ -1,5 +1,5 @@
 import { ClerkProvider } from '@clerk/nextjs';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { Suspense } from 'react';
 
@@ -21,6 +21,12 @@ export const metadata: Metadata = {
   title: 'Morph Flow',
   description:
     'Describe your day in plain language and watch your interface build itself — instant task lists, habit trackers, and schedules with zero clutter.',
+};
+
+// `cover` lets the page reach under the iPhone home indicator; without it the
+// `env(safe-area-inset-*)` values the dock relies on are always 0.
+export const viewport: Viewport = {
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
