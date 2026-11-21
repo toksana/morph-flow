@@ -60,6 +60,15 @@ const mockFetch = (...responses: Response[]) => {
 /** The JSON the endpoint streams for one widget. */
 const responseJson = (widget: object): string => JSON.stringify({ widget });
 
+const FIRST_TASK_START = '"tasks":[{';
+
+/**
+ * A task list's JSON cut just inside its first task. The cut must leave a required field missing:
+ * cut after a whole task and the repaired partial JSON is a valid, shorter list.
+ */
+const cutInsideFirstTask = (json: string): string =>
+  json.slice(0, json.indexOf(FIRST_TASK_START) + FIRST_TASK_START.length);
+
 const typePrompt = (prompt: string) => {
   fireEvent.change(screen.getByLabelText(PROMPT_LABEL), {
     target: { value: prompt },
@@ -270,7 +279,7 @@ describe('WidgetGenerator', () => {
     clickGenerate();
 
     // Act: the connection ends before the JSON is complete, still with status 200.
-    stream.push(json.slice(0, json.length / 2));
+    stream.push(cutInsideFirstTask(json));
     stream.close();
 
     // Assert
