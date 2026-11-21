@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildHabitStreakCard } from '@/core/test/factories/habitStreakCard.factory';
 import { buildTaskList } from '@/core/test/factories/taskList.factory';
+import { GUEST_PROMPT_LIMIT, USER_PROMPT_LIMIT } from '@/core/constants';
 import { widgetResponseSchema } from '@/core/widgets/widget.schema';
 
 import { mockFailingModel, mockStreamingModel, splitIntoDeltas } from '../test/mockLanguageModel';
@@ -165,7 +166,11 @@ describe('createGenerateHandler', () => {
     it("saves the caller with the request's time zone", async () => {
       // Arrange
       const clerkUserId = buildClerkUserId();
-      const timeZone = faker.helpers.arrayElement(['Asia/Tokyo', 'America/New_York', 'Asia/Kolkata']);
+      const timeZone = faker.helpers.arrayElement([
+        'Asia/Tokyo',
+        'America/New_York',
+        'Asia/Kolkata',
+      ]);
       const saveUser = vi.fn(async () => undefined);
       const handler = createGenerateHandler({
         model: streamingModel(),
@@ -233,6 +238,75 @@ describe('createGenerateHandler', () => {
       expect(response.status).toBe(200);
       expect(widgetResponseSchema.parse(JSON.parse(text))).toEqual(widget);
       expect(consoleError).toHaveBeenCalledWith('[generate] saving the user failed:', message);
+    });
+  });
+
+  describe('prompt limit', () => {
+    const promptOf = (length: number): string => faker.string.alpha({ length });
+    const signedIn = async (): Promise<string> => `user_${faker.string.alphanumeric(24)}`;
+
+    it("rejects a guest's prompt past the guest limit with 413 without calling the model", async () => {
+      // Arrange
+      const model = mockStreamingModel([]);
+      const length = faker.number.int({ min: GUEST_PROMPT_LIMIT + 1, max: USER_PROMPT_LIMIT });
+
+      // Act
+      const response = await createGenerateHandler({ model })(postPrompt(promptOf(length)));
+
+      // Assert
+      expect(response.status).toBe(413);
+      expect(await response.json()).toEqual({
+        error: 'Prompt too long',
+        limit: GUEST_PROMPT_LIMIT,
+      });
+      expect(model.doStreamCalls).toHaveLength(0);
+    });
+
+    it("accepts a guest's prompt exactly at the guest limit", async () => {
+      // Arrange
+      const model = mockStreamingModel([JSON.stringify(buildRandomResponse())]);
+
+      // Act
+      const response = await createGenerateHandler({ model })(
+        postPrompt(promptOf(GUEST_PROMPT_LIMIT)),
+      );
+      await response.text();
+
+      // Assert
+      expect(response.status).toBe(200);
+      expect(model.doStreamCalls).toHaveLength(1);
+    });
+
+    it("rejects a signed-in user's prompt past the user limit with 413", async () => {
+      // Arrange
+      const model = mockStreamingModel([]);
+      const saveUser = vi.fn(async () => undefined);
+      const length = faker.number.int({ min: USER_PROMPT_LIMIT + 1, max: USER_PROMPT_LIMIT * 2 });
+      const handler = createGenerateHandler({ model, identify: signedIn, saveUser });
+
+      // Act
+      const response = await handler(postPrompt(promptOf(length)));
+
+      // Assert
+      expect(response.status).toBe(413);
+      expect(await response.json()).toEqual({ error: 'Prompt too long', limit: USER_PROMPT_LIMIT });
+      expect(model.doStreamCalls).toHaveLength(0);
+      expect(saveUser).not.toHaveBeenCalled();
+    });
+
+    it('lets a signed-in user send a prompt up to the user limit', async () => {
+      // Arrange
+      const model = mockStreamingModel([JSON.stringify(buildRandomResponse())]);
+      const length = faker.number.int({ min: GUEST_PROMPT_LIMIT + 1, max: USER_PROMPT_LIMIT });
+      const handler = createGenerateHandler({ model, identify: signedIn });
+
+      // Act
+      const response = await handler(postPrompt(promptOf(length)));
+      await response.text();
+
+      // Assert
+      expect(response.status).toBe(200);
+      expect(model.doStreamCalls).toHaveLength(1);
     });
   });
 });

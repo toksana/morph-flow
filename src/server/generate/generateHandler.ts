@@ -2,11 +2,13 @@ import type { LanguageModel } from 'ai';
 
 import { formatPromptDate } from '@/core/widgets/promptDate';
 import { generateRequestSchema } from '@/core/widgets/generate.request';
+import { isPromptOverLimit, promptLimitFor } from '@/core/widgets/promptLimit';
 import type { UserIdentity } from '@/server/db/users';
 
 import { streamWidget } from './streamWidget';
 
 const INVALID_REQUEST_STATUS = 400;
+const PROMPT_TOO_LONG_STATUS = 413;
 
 interface GenerateHandlerDeps {
   /** Defaults to the AI Gateway model; tests pass a mock. */
@@ -43,12 +45,10 @@ const logStreamError = (error: unknown): void => logError('stream failed', error
 
 /** A database hiccup must not cost the user their card: log it and keep generating. */
 const saveSignedInUser = async (
-  identify: () => Promise<string | null>,
   saveUser: (identity: UserIdentity) => Promise<void>,
+  clerkUserId: string,
   timeZone: string,
 ): Promise<void> => {
-  const clerkUserId = await identify();
-  if (clerkUserId === null) return;
   try {
     await saveUser({ clerkUserId, timeZone });
   } catch (error) {
@@ -56,7 +56,7 @@ const saveSignedInUser = async (
   }
 };
 
-/** Builds the POST handler: validate the body, then stream a widget for the user's day. */
+/** Builds the POST handler: validate the body, apply the caller's prompt limit, then stream a widget. */
 export const createGenerateHandler =
   ({
     model,
@@ -70,7 +70,12 @@ export const createGenerateHandler =
       return Response.json({ error: 'Invalid request' }, { status: INVALID_REQUEST_STATUS });
     }
     const { prompt, timeZone } = parsed.data;
-    await saveSignedInUser(identify, saveUser, timeZone);
+    const clerkUserId = await identify();
+    const limit = promptLimitFor(clerkUserId !== null);
+    if (isPromptOverLimit(prompt, limit)) {
+      return Response.json({ error: 'Prompt too long', limit }, { status: PROMPT_TOO_LONG_STATUS });
+    }
+    if (clerkUserId !== null) await saveSignedInUser(saveUser, clerkUserId, timeZone);
     return streamWidget({
       prompt,
       today: formatPromptDate(now(), timeZone),

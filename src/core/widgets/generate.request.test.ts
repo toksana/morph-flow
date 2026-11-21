@@ -1,7 +1,8 @@
 import { faker } from '@faker-js/faker';
 import { describe, expect, it } from 'vitest';
 
-import { MAX_PROMPT_LENGTH, generateRequestSchema } from './generate.request';
+import { USER_PROMPT_LIMIT } from '../constants';
+import { generateRequestSchema } from './generate.request';
 
 const RANDOM_RUNS = 50;
 const TIME_ZONES = ['UTC', 'Europe/Berlin', 'America/New_York', 'Asia/Tokyo'];
@@ -13,10 +14,10 @@ const buildRequest = (overrides: Record<string, unknown> = {}): Record<string, u
 });
 
 describe('generateRequestSchema', () => {
-  it('accepts random prompts within the length limit', () => {
+  it('accepts random prompts within the user limit', () => {
     // Arrange
     const requests = Array.from({ length: RANDOM_RUNS }, () =>
-      buildRequest({ prompt: faker.string.alpha({ length: { min: 1, max: MAX_PROMPT_LENGTH } }) }),
+      buildRequest({ prompt: faker.string.alpha({ length: { min: 1, max: USER_PROMPT_LIMIT } }) }),
     );
 
     // Act
@@ -42,7 +43,6 @@ describe('generateRequestSchema', () => {
     ['empty prompt', { prompt: '' }],
     ['whitespace-only prompt', { prompt: '   \n' }],
     ['non-string prompt', { prompt: 42 }],
-    ['too long prompt', { prompt: 'a'.repeat(MAX_PROMPT_LENGTH + 1) }],
     ['missing time zone', { timeZone: undefined }],
     ['unknown time zone', { timeZone: 'Mars/Olympus' }],
     ['overlong time zone', { timeZone: `Europe/${'a'.repeat(64)}` }],
@@ -62,10 +62,10 @@ describe('generateRequestSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('accepts a prompt exactly at the length limit', () => {
+  it('leaves prompts past every limit to the server check, which answers 413', () => {
     // Act
     const result = generateRequestSchema.safeParse(
-      buildRequest({ prompt: 'a'.repeat(MAX_PROMPT_LENGTH) }),
+      buildRequest({ prompt: 'a'.repeat(USER_PROMPT_LIMIT + 1) }),
     );
 
     // Assert

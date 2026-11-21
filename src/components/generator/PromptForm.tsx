@@ -1,7 +1,6 @@
 import { Terminal } from 'lucide-react';
 import { type FormEvent, type JSX, type KeyboardEvent, type ReactNode, useId, useRef } from 'react';
 
-import { MAX_PROMPT_LENGTH } from '@/core/widgets/generate.request';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useAdoptPreHydrationValue } from '@/hooks/useAdoptPreHydrationValue';
@@ -83,7 +82,6 @@ export const PromptForm = ({
           onChange={(event) => onValueChange(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          maxLength={MAX_PROMPT_LENGTH}
           rows={1}
           className={cn(
             'flex-1 resize-none border-0 bg-transparent px-1 shadow-none focus-visible:ring-0 dark:bg-transparent',
