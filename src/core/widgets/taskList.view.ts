@@ -1,5 +1,11 @@
 import type { DeepPartial } from './deepPartial';
-import { type Task, type TaskList, type TaskPriority, taskSchema } from './taskList.schema';
+import {
+  type Task,
+  type TaskList,
+  type TaskPriority,
+  taskPrioritySchema,
+  taskSchema,
+} from './taskList.schema';
 import { completionPercent, nonBlank } from './viewUtils';
 
 export interface TaskView {
@@ -11,7 +17,8 @@ export interface TaskView {
   id: string;
   title: string;
   done: boolean;
-  priority: TaskPriority;
+  /** Missing until the model has written a full value: a guessed default would change mid-stream. */
+  priority?: TaskPriority;
   due?: string;
 }
 
@@ -24,12 +31,15 @@ export interface TaskListView {
   completionPercent: number;
 }
 
-export const DEFAULT_PRIORITY: TaskPriority = 'medium';
 const VIEW_ID_PREFIX = 'task';
 
 /** A date that is still streaming (e.g. "2026-1") is hidden until it is a full ISO date. */
 export const completeDueDate = (value: string | undefined): string | undefined =>
   taskSchema.shape.due.safeParse(value).data;
+
+/** A priority that has not streamed, or is still a prefix (e.g. "hi"), is hidden until complete. */
+export const completePriority = (value: string | undefined): TaskPriority | undefined =>
+  taskPrioritySchema.safeParse(value).data;
 
 const toTaskView = (task: DeepPartial<Task> | undefined, index: number): TaskView | null => {
   const title = nonBlank(task?.title);
@@ -38,7 +48,7 @@ const toTaskView = (task: DeepPartial<Task> | undefined, index: number): TaskVie
     id: `${VIEW_ID_PREFIX}-${index}`,
     title,
     done: task?.done ?? false,
-    priority: task?.priority ?? DEFAULT_PRIORITY,
+    priority: completePriority(task?.priority),
     due: completeDueDate(task?.due),
   };
 };
