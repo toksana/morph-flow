@@ -4,6 +4,10 @@
 interactive card appears: a task list or a habit streak. The model picks the widget, and the card
 fills in live while the model is still writing it.
 
+**Live demo:** [morph-flow-ten.vercel.app](https://morph-flow-ten.vercel.app/)
+
+![A task list card fills in row by row while the model streams it](docs/demo.gif)
+
 > **🚧 Status: work in progress.**
 >
 > **Works now:** a TaskList or HabitStreakCard from one prompt, streaming in live; optional
@@ -12,8 +16,16 @@ fills in live while the model is still writing it.
 > **Next:** saving cards (to Postgres for signed-in users, in the browser for guests), then
 > editing saved cards and more widget types.
 
-- _"My tasks for tomorrow: workout, finish the report, call mom"_ → a **TaskList** with due dates and priorities
-- _"30-day reading challenge, I'm 5 days in and already read today"_ → a **HabitStreakCard** with progress and a check-in button
+## Widgets
+
+The model picks one of these from the prompt:
+
+- **TaskList:** _"My tasks for tomorrow: workout, finish the report, call mom"_ → tasks with due
+  dates and priorities, streamed in row by row.
+- **HabitStreakCard:** _"Drink 2 liters of water every day for a month"_ → a streak toward a goal,
+  with a check-in button that works as soon as the card is complete.
+
+![A habit card for drinking water streams in, then the check-in button marks today as done](docs/demo-habits.gif)
 
 ## How it works
 
