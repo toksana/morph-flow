@@ -7,7 +7,7 @@ export const uuidV7PrimaryKey = () =>
     .primaryKey()
     .default(sql`uuidv7()`);
 
-const timestampTz = () => timestamp({ withTimezone: true, mode: 'date' });
+export const timestampTz = () => timestamp({ withTimezone: true, mode: 'date' });
 
 /**
  * Server clock on insert and on every update, never the client's: `updatedAt` is the cursor
@@ -17,4 +17,12 @@ const timestampTz = () => timestamp({ withTimezone: true, mode: 'date' });
 export const auditTimestamps = {
   createdAt: timestampTz().notNull().defaultNow(),
   updatedAt: timestampTz().notNull().defaultNow(),
+};
+
+/**
+ * Tombstone for synced rows: deleting sets the time instead of removing the row, so a device
+ * that was offline still learns about the delete on its next pull.
+ */
+export const softDelete = {
+  deletedAt: timestampTz(),
 };
