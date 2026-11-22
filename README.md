@@ -25,11 +25,23 @@ fields arrive.
 sequenceDiagram
   participant UI as Browser (useObject)
   participant API as POST /api/generate
+  participant Clerk
+  participant RL as Upstash Redis
+  participant DB as Neon Postgres
   participant LLM as AI Gateway (Claude Haiku)
 
-  UI->>API: { prompt, timeZone }
-  API->>API: validate with Zod, build the system prompt for the user's "today"
-  API->>LLM: streamText + Output.object(widget union schema)
+  UI->>API: { prompt, timeZone } (proxy.ts attaches the Clerk session)
+  API->>API: validate with Zod (400 if invalid)
+  API->>Clerk: auth() → user id, or null for a guest
+  API->>API: prompt length: guest 500 / user 2000 chars (413 if over)
+  opt KV_REST_API_* set
+    API->>RL: sliding 1 h window, by user id or IP
+    RL-->>API: allowed, or 429 with Retry-After
+  end
+  opt signed in
+    API->>DB: upsert user (a failure is logged, the card still streams)
+  end
+  API->>LLM: streamText + Output.object(widget union schema), system prompt for the user's "today"
   LLM-->>API: JSON tokens
   API-->>UI: text stream of partial JSON
   UI->>UI: parse partial JSON → WidgetRenderer switches on widget.type
@@ -43,6 +55,8 @@ sequenceDiagram
   from the `WIDGETS` list.
 - **Dates in the user's day.** The browser sends its time zone, so "tomorrow" resolves to the
   user's calendar date, not the server's.
+- **Limits before cost.** Rejected requests (400, 413) don't use up the hourly allowance. If
+  Redis is down, the request goes through and the prompt limit still caps its cost.
 - **Errors stay on the server.** The client shows a generic message. Details go to the server log.
 
 ## Stack
