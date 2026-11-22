@@ -4,6 +4,14 @@
 interactive card appears: a task list or a habit streak. The model picks the widget, and the card
 fills in live while the model is still writing it.
 
+> **🚧 Status: work in progress.**
+>
+> **Works now:** a TaskList or HabitStreakCard from one prompt, streaming in live; optional
+> sign-in with Clerk; hourly generation limits for guests and signed-in users.
+>
+> **Next:** saving cards (to Postgres for signed-in users, in the browser for guests), then
+> editing saved cards and more widget types.
+
 - _"My tasks for tomorrow: workout, finish the report, call mom"_ → a **TaskList** with due dates and priorities
 - _"30-day reading challenge, I'm 5 days in and already read today"_ → a **HabitStreakCard** with progress and a check-in button
 
@@ -40,7 +48,8 @@ sequenceDiagram
 ## Stack
 
 Next.js 16 (App Router) · React 19 · TypeScript (strict) · AI SDK 7 with Vercel AI Gateway ·
-Zod 4 · Tailwind CSS 4 · shadcn/ui · Vitest + React Testing Library · pnpm
+Zod 4 · Clerk (auth) · Neon Postgres + Drizzle ORM · Upstash Redis + Ratelimit · Tailwind CSS 4 ·
+shadcn/ui · Vitest + React Testing Library · Playwright · pnpm
 
 ## Getting started
 
@@ -48,19 +57,25 @@ Requirements: **Node.js 22+** and **pnpm** (the version is pinned in `package.js
 
 ```bash
 pnpm install
+cp .env.example .env.local
 ```
 
-The app calls the model through [Vercel AI Gateway](https://vercel.com/docs/ai-gateway). Give it
-credentials in one of two ways:
+Only the model credentials are required. Everything else can stay empty for a first look:
 
-- **API key:** create an AI Gateway API key and put it in `.env.local`:
+| Variable                                                | Needed                           | Without it                                                           |
+| ------------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------- |
+| `AI_GATEWAY_API_KEY`                                    | **Yes** (or a Vercel OIDC token) | Generation fails.                                                    |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | For `build` / `start` / e2e      | `pnpm dev` runs Clerk in keyless mode with a temporary dev instance. |
+| `DATABASE_URL`                                          | To save signed-in users          | Cards still generate; saving the signed-in user fails and is logged. |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN`                  | No                               | The rate limit turns itself off and the server logs a warning.       |
 
-  ```bash
-  AI_GATEWAY_API_KEY=your_key_here
-  ```
-
-- **Vercel project:** if the repo is linked to a Vercel project, `vercel link` then
-  `vercel env pull` writes a short-lived OIDC token to `.env.local` instead.
+- **Model:** the app calls the model through [Vercel AI Gateway](https://vercel.com/docs/ai-gateway).
+  Create an AI Gateway API key, or link the repo to a Vercel project (`vercel link`, then
+  `vercel env pull .env.local`) to get a short-lived OIDC token instead.
+- **Database:** create a [Neon](https://neon.tech) database (the Vercel Marketplace integration
+  works too), set `DATABASE_URL`, then apply the migrations with `pnpm db:migrate`.
+- **Rate limit:** the Upstash for Redis integration on Vercel sets the `KV_REST_API_*` names.
+  Guests get 10 generations per hour (by IP), signed-in users 30 (by account).
 
 Then start the dev server and open [http://localhost:3000](http://localhost:3000):
 
@@ -77,9 +92,13 @@ pnpm dev
 | `pnpm start`        | Serve the production build      |
 | `pnpm test`         | Run all tests once (Vitest)     |
 | `pnpm test:watch`   | Tests in watch mode             |
-| `pnpm typecheck`    | `tsc --noEmit`                  |
+| `pnpm test:e2e`     | Playwright end-to-end tests     |
+| `pnpm typecheck`    | `next typegen` + `tsc --noEmit` |
 | `pnpm lint`         | ESLint                          |
 | `pnpm format:check` | Prettier check (`format` fixes) |
+| `pnpm db:generate`  | Drizzle migration from schema   |
+| `pnpm db:migrate`   | Apply migrations to the DB      |
+| `pnpm db:studio`    | Drizzle Studio                  |
 
 ## Project structure
 
@@ -89,6 +108,9 @@ src/
                No React, Next.js, DOM or Node imports (enforced by ESLint), so it can become
                a shared package for a React Native app later.
   server/      The generate handler and the streaming call to the model.
+    db/        Drizzle schema, Neon client, user upsert. Migrations live in /drizzle.
+    rateLimit/ Upstash sliding-window limiter, keyed by Clerk user id or client IP.
+  proxy.ts     Clerk middleware: attaches the session, keeps every route public.
   app/         Next.js routes: the page and /api/generate.
   hooks/       useWidgetStream (useObject wrapper) and useGeneratorSession (field, stream,
                start screen ↔ canvas).
