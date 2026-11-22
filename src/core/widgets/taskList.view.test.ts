@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import { buildTask, buildTaskList, buildTasks } from '../test/factories/taskList.factory';
 
-import { MAX_TASKS } from './taskList.schema';
-import { completeDueDate, DEFAULT_PRIORITY, toTaskListView } from './taskList.view';
+import { MAX_TASKS, TASK_PRIORITIES } from './taskList.schema';
+import { completeDueDate, completePriority, toTaskListView } from './taskList.view';
 
 const RANDOM_RUNS = 50;
 const ISO_DATE_LENGTH = 'YYYY-MM-DD'.length;
@@ -45,6 +45,37 @@ describe('completeDueDate', () => {
       expect(result).toBeUndefined();
     },
   );
+});
+
+describe('completePriority', () => {
+  it.each(TASK_PRIORITIES)('keeps the complete priority %s', (priority) => {
+    // Act
+    const result = completePriority(priority);
+
+    // Assert
+    expect(result).toBe(priority);
+  });
+
+  it.each(TASK_PRIORITIES)('hides every strict prefix of %s while it streams', (priority) => {
+    // Arrange
+    const prefixes = Array.from({ length: priority.length }, (_, length) =>
+      priority.slice(0, length),
+    );
+
+    // Act
+    const results = prefixes.map(completePriority);
+
+    // Assert
+    results.forEach((result) => expect(result).toBeUndefined());
+  });
+
+  it.each([[undefined], ['urgent'], ['High']])('returns undefined for %j', (value) => {
+    // Act
+    const result = completePriority(value);
+
+    // Assert
+    expect(result).toBeUndefined();
+  });
 });
 
 describe('toTaskListView', () => {
@@ -155,7 +186,7 @@ describe('toTaskListView', () => {
     expect(task.title).toBe(title);
   });
 
-  it('fills defaults for fields that have not streamed yet', () => {
+  it('leaves out fields that have not streamed yet instead of guessing them', () => {
     // Arrange
     const title = faker.lorem.words(3);
 
@@ -167,7 +198,7 @@ describe('toTaskListView', () => {
       id: 'task-0',
       title,
       done: false,
-      priority: DEFAULT_PRIORITY,
+      priority: undefined,
       due: undefined,
     });
   });

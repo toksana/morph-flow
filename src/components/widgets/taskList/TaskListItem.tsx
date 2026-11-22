@@ -35,7 +35,7 @@ export const TaskListItem = ({ task, locale }: TaskListItemProps): JSX.Element =
           {formatDueDate(task.due, locale)}
         </time>
       )}
-      <PriorityBadge priority={task.priority} />
+      {task.priority !== undefined && <PriorityBadge priority={task.priority} />}
     </li>
   );
 };
