@@ -22,8 +22,8 @@ export const upsertUser = async (
     .values({ clerkUserId, timeZone })
     .onConflictDoUpdate({
       target: users.clerkUserId,
-      // `$onUpdate` does not fire inside ON CONFLICT, so the timestamp is set explicitly.
-      set: { timeZone, updatedAt: sql`now()` },
+      // The `set_updated_at` trigger stamps `updated_at`.
+      set: { timeZone },
       setWhere: sql`${users.timeZone} is distinct from excluded.time_zone`,
     });
 };

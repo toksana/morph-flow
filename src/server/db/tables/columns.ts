@@ -11,12 +11,10 @@ const timestampTz = () => timestamp({ withTimezone: true, mode: 'date' });
 
 /**
  * Server clock on insert and on every update, never the client's: `updatedAt` is the cursor
- * the future sync pull reads, so device clock skew must not move it.
+ * the future sync pull reads, so device clock skew must not move it. Updates are stamped by the
+ * `set_updated_at` trigger (migration 0001), which every table with these columns must attach.
  */
 export const auditTimestamps = {
   createdAt: timestampTz().notNull().defaultNow(),
-  updatedAt: timestampTz()
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => sql`now()`),
+  updatedAt: timestampTz().notNull().defaultNow(),
 };
