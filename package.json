@@ -1,7 +1,6 @@
 {
   "name": "morph-flow",
   "version": "0.1.0",
-  "private": true,
   "license": "MIT",
   "scripts": {
     "dev": "next dev",
@@ -10,7 +9,7 @@
     "lint": "eslint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

@@ -11,6 +11,7 @@ import { DEFAULT_LOCALE, TaskList } from './TaskList';
 import { TASK_LIST_LABEL } from './TaskListHeader';
 
 const RANDOM_RUNS = 10;
+const TASK_PRIORITY_LABELS = ['High', 'Medium', 'Low'];
 const ISO_DATE_LENGTH = 'YYYY-MM-DD'.length;
 
 const renderList = (tasks = buildTaskList().tasks) => {
@@ -123,5 +124,20 @@ describe('TaskList', () => {
 
     // Assert
     expect(within(item).getByText(label)).toBeInTheDocument();
+  });
+
+  it('shows no priority badge until the priority has streamed', () => {
+    // Arrange
+    const title = faker.lorem.words(3);
+    const view = toTaskListView({ tasks: [{ title }] });
+
+    // Act
+    render(<TaskList view={view} />);
+
+    // Assert
+    const item = screen.getByRole('listitem');
+    TASK_PRIORITY_LABELS.forEach((label) =>
+      expect(within(item).queryByText(label)).not.toBeInTheDocument(),
+    );
   });
 });
