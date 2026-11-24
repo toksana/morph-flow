@@ -1,7 +1,7 @@
 import { faker } from '@faker-js/faker';
 import { describe, expect, it } from 'vitest';
 
-import { currentTimeZone, formatPromptDate, isValidTimeZone } from './promptDate';
+import { currentTimeZone, formatPromptDate, isValidTimeZone, localDay } from './promptDate';
 
 const RANDOM_RUNS = 100;
 const HOUR_MS = 60 * 60 * 1000;
@@ -55,6 +55,23 @@ describe('formatPromptDate', () => {
 
     // Assert
     expect(result).toBe(expected);
+  });
+});
+
+describe('localDay', () => {
+  it('is the ISO date of the prompt date, for random instants in random zones', () => {
+    Array.from({ length: RANDOM_RUNS }).forEach(() => {
+      // Arrange
+      const now = faker.date.anytime();
+      const offsetHours = faker.number.int({ min: MIN_OFFSET_HOURS, max: MAX_OFFSET_HOURS });
+
+      // Act
+      const result = localDay(now, fixedOffsetZone(offsetHours));
+
+      // Assert
+      expect(result).toHaveLength(ISO_DATE_LENGTH);
+      expect(expectedPromptDate(now, offsetHours)).toContain(`, ${result}`);
+    });
   });
 });
 
