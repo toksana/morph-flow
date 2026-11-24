@@ -75,3 +75,12 @@ export const orderBySnapshot = (
   const known = new Set(ids);
   return [...ordered, ...tasks.filter((task) => !known.has(task.id))];
 };
+
+/**
+ * The ids a view fixes when it is entered: the most urgent open tasks for the collapsed card,
+ * every task in expanded order for "Show all". Ticks made later keep the rows in place.
+ */
+export const snapshotTaskIds = (tasks: readonly TaskView[], isExpanded: boolean): string[] =>
+  isExpanded
+    ? orderByUrgency(tasks).map((task) => task.id)
+    : topOpenTaskIds(tasks, COLLAPSED_LIMIT);

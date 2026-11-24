@@ -81,4 +81,20 @@ describe('createLoadSavedTasks', () => {
     expect(tasks).toBeNull();
     expect(consoleError).toHaveBeenCalledWith('[tasks] loading saved tasks failed:', message);
   });
+
+  it('lets a failed session read through, so Next.js can defer the read to request time', async () => {
+    // Arrange
+    const signal = new Error(faker.lorem.sentence());
+    const { deps } = signedIn({
+      identify: async () => {
+        throw signal;
+      },
+    });
+
+    // Act
+    const result = createLoadSavedTasks(deps)();
+
+    // Assert
+    await expect(result).rejects.toBe(signal);
+  });
 });

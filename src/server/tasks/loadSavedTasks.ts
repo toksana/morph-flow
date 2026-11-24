@@ -17,14 +17,17 @@ export interface LoadSavedTasksDeps {
 /**
  * Builds the loader for the "Your tasks" card.
  * @returns the caller's live tasks in creation order, or null when there is nothing to show:
- * a guest, a user with no row yet, or a failed read (logged, so the start screen still renders)
+ * a guest, a user with no row yet, or a failed database read (logged, so the start screen still
+ * renders). A failed session read is not caught.
  */
 export const createLoadSavedTasks =
   ({ identify, findUserId, listTasks }: LoadSavedTasksDeps) =>
   async (): Promise<TaskView[] | null> => {
+    // Outside the try: during a prerender, the session read rejects on purpose to mark the
+    // component as request-time, and Next.js must see that rejection.
+    const clerkUserId = await identify();
+    if (clerkUserId === null) return null;
     try {
-      const clerkUserId = await identify();
-      if (clerkUserId === null) return null;
       const userId = await findUserId(clerkUserId);
       if (userId === null) return null;
       return (await listTasks(userId)).map(toSavedTaskView);

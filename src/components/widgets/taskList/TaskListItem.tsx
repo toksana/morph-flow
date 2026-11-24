@@ -10,17 +10,25 @@ import { PriorityBadge } from './PriorityBadge';
 interface TaskListItemProps {
   task: TaskView;
   locale: string;
+  /** Makes the checkbox clickable; without it the row only mirrors `done` (a streamed card). */
+  onToggle?: (taskId: string, done: boolean) => void;
+  className?: string;
 }
 
-/** Read-only row: the checkbox mirrors the streamed `done` flag and cannot be toggled. */
-export const TaskListItem = ({ task, locale }: TaskListItemProps): JSX.Element => {
+export const TaskListItem = ({
+  task,
+  locale,
+  onToggle,
+  className,
+}: TaskListItemProps): JSX.Element => {
   const titleId = useId();
 
   return (
-    <li className="flex items-center gap-3 py-2">
+    <li className={cn('flex items-center gap-3 py-2', className)}>
       <Checkbox
         checked={task.done}
-        disabled
+        disabled={onToggle === undefined}
+        onCheckedChange={(checked) => onToggle?.(task.id, checked === true)}
         aria-labelledby={titleId}
         className="disabled:cursor-default disabled:opacity-100"
       />

@@ -1,18 +1,17 @@
 'use server';
 
-import { auth } from '@clerk/nextjs/server';
 import { refresh } from 'next/cache';
 
 import type { ToggleTaskResult } from '@/core/tasks/taskToggle';
 import { getDb } from '@/server/db/client';
 import { setTaskCompleted } from '@/server/db/tasks';
-import { findUserId } from '@/server/db/users';
 import { createToggleTask } from '@/server/tasks/toggleTask';
 
+import { findCallerUserId, identifyCaller } from '../_tasks/deps';
+
 const toggleTask = createToggleTask({
-  identify: async () => (await auth()).userId,
-  // `async` turns a synchronous throw from getDb() (no DATABASE_URL) into a rejection.
-  findUserId: async (clerkUserId) => findUserId(getDb(), clerkUserId),
+  identify: identifyCaller,
+  findUserId: findCallerUserId,
   setTaskCompleted: async (userId, taskId, done) => setTaskCompleted(getDb(), userId, taskId, done),
 });
 

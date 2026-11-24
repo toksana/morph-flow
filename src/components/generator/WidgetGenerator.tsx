@@ -30,6 +30,8 @@ const CANVAS_DOCK_ROOM_CLASS = 'pb-[calc(12rem+env(safe-area-inset-bottom))]';
 interface WidgetGeneratorProps {
   /** Start-screen content above the field (e.g. the hero); hidden once a card is requested. */
   intro?: ReactNode;
+  /** The signed-in user's saved tasks, under the examples; hidden on the canvas like the intro. */
+  saved?: ReactNode;
 }
 
 /**
@@ -37,7 +39,7 @@ interface WidgetGeneratorProps {
  * card and the field moves to a dock at the bottom. Every child keeps its slot in both states, so
  * the field is the same element (it keeps focus) and only its position animates.
  */
-export const WidgetGenerator = ({ intro }: WidgetGeneratorProps): JSX.Element => {
+export const WidgetGenerator = ({ intro, saved }: WidgetGeneratorProps): JSX.Element => {
   const { prompt, setPrompt, isOnCanvas, send, startNew, stream } = useGeneratorSession();
   const { limit, isSignedIn } = usePromptLimit();
 
@@ -81,6 +83,7 @@ export const WidgetGenerator = ({ intro }: WidgetGeneratorProps): JSX.Element =>
         </div>
       </ViewTransition>
       {!isOnCanvas && <PromptPresets onPick={send} disabled={stream.isStreaming} />}
+      {!isOnCanvas && saved}
     </div>
   );
 };

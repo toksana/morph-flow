@@ -15,8 +15,8 @@ export interface ToggleTaskDeps {
 
 /**
  * Builds the toggle behind the Server Action. The action is a public POST endpoint, so the input
- * is validated and the caller checked on every call; the task must be theirs. It never throws:
- * failures come back as a result, and the client rolls its optimistic tick back.
+ * is validated and the caller checked on every call; the task must be theirs. Database failures
+ * come back as a result, and the client rolls its optimistic tick back.
  */
 export const createToggleTask =
   ({ identify, findUserId, setTaskCompleted }: ToggleTaskDeps) =>
@@ -24,9 +24,10 @@ export const createToggleTask =
     const parsed = toggleTaskRequestSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: 'invalid' };
     const { taskId, done } = parsed.data;
+    // Outside the try, like every framework call: Next.js signals through rejections there.
+    const clerkUserId = await identify();
+    if (clerkUserId === null) return { ok: false, error: 'unauthorized' };
     try {
-      const clerkUserId = await identify();
-      if (clerkUserId === null) return { ok: false, error: 'unauthorized' };
       const userId = await findUserId(clerkUserId);
       const updated = userId !== null && (await setTaskCompleted(userId, taskId, done));
       return updated ? { ok: true } : { ok: false, error: 'not_found' };

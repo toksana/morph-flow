@@ -12,6 +12,7 @@ import {
   orderBySnapshot,
   orderByUrgency,
   showAllVisibility,
+  snapshotTaskIds,
   topOpenTaskIds,
 } from './taskUrgency';
 
@@ -230,5 +231,22 @@ describe('orderBySnapshot', () => {
 
     // Assert
     expect(ordered).toEqual([]);
+  });
+});
+
+describe('snapshotTaskIds', () => {
+  it('fixes the collapsed set when collapsed and every task in expanded order when expanded', () => {
+    Array.from({ length: RANDOM_RUNS }).forEach(() => {
+      // Arrange
+      const tasks = randomTasks();
+
+      // Act
+      const collapsed = snapshotTaskIds(tasks, false);
+      const expanded = snapshotTaskIds(tasks, true);
+
+      // Assert
+      expect(collapsed).toEqual(topOpenTaskIds(tasks, COLLAPSED_LIMIT));
+      expect(expanded).toEqual(ids(orderByUrgency(tasks)));
+    });
   });
 });
