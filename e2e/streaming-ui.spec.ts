@@ -18,6 +18,7 @@ const NEW_CARD = 'New';
 const PRESETS = 'Or try an example';
 const ERROR_TEXT = 'Something went wrong. Please try again.';
 const START_HEADING = /Zero-UI task and habit planner/;
+const SAVED_TASKS_TITLE = 'Your tasks';
 
 let mock: MockStreamServer;
 
@@ -44,6 +45,8 @@ const openStartScreen = async (page: Page): Promise<void> => {
   // Clicking before hydration would submit a plain form, so wait until the app is interactive.
   await page.waitForLoadState('networkidle');
   await expect(page.getByRole('heading', { name: START_HEADING })).toBeVisible();
+  // A guest has nothing saved, so the start screen shows no saved-task card.
+  await expect(page.getByText(SAVED_TASKS_TITLE)).toHaveCount(0);
 };
 
 test('streams a card in pieces, finishes it, and drops it on New mid-stream', async ({ page }) => {
