@@ -8,6 +8,8 @@ import {
   type RateLimitBody,
   retryAfterSeconds,
 } from '@/core/widgets/rateLimit';
+import type { Widget } from '@/core/widgets/widget.schema';
+import { type TaskValues, generatedTaskValues } from '@/server/db/taskValues';
 import type { UserIdentity } from '@/server/db/users';
 import {
   type CheckRateLimit,
@@ -29,14 +31,15 @@ interface GenerateHandlerDeps {
   now?: () => Date;
   /** Clerk user id of the caller, or null for a guest. Defaults to treating everyone as a guest. */
   identify?: () => Promise<string | null>;
-  /** Stores the signed-in caller's row; skipped for guests. */
-  saveUser?: (identity: UserIdentity) => Promise<void>;
+  /** Stores the signed-in caller's row and returns its `users.id`; skipped for guests. */
+  saveUser?: (identity: UserIdentity) => Promise<string>;
+  /** Stores a signed-in user's generated tasks, in order; the database hands out their ids. */
+  saveTasks?: (userId: string, tasks: readonly TaskValues[]) => Promise<void>;
   /** Counts the request against the caller's hourly allowance. Defaults to no limit. */
   checkRateLimit?: CheckRateLimit;
 }
 
 const guest = async (): Promise<null> => null;
-const skipSave = async (): Promise<void> => undefined;
 const noRateLimit: CheckRateLimit = async () => ({ success: true, limit: 0, reset: 0 });
 
 const readJson = async (request: Request): Promise<unknown> => {
@@ -58,16 +61,37 @@ const logError = (scope: string, error: unknown): void => {
 
 const logStreamError = (error: unknown): void => logError('stream failed', error);
 
-/** A database hiccup must not cost the user their card: log it and keep generating. */
+/**
+ * A database hiccup must not cost the user their card: log it and keep generating.
+ * @returns the user's `users.id`, or null if there is no store or it failed (the card is then
+ * not saved either)
+ */
 const saveSignedInUser = async (
-  saveUser: (identity: UserIdentity) => Promise<void>,
-  clerkUserId: string,
-  timeZone: string,
-): Promise<void> => {
+  saveUser: GenerateHandlerDeps['saveUser'],
+  identity: UserIdentity,
+): Promise<string | null> => {
+  if (saveUser === undefined) return null;
   try {
-    await saveUser({ clerkUserId, timeZone });
+    return await saveUser(identity);
   } catch (error) {
     logError('saving the user failed', error);
+    return null;
+  }
+};
+
+/** Saves the finished card's tasks. Runs after the card is on screen, so a failure is only logged. */
+const saveGeneratedTasks = async (
+  saveTasks: GenerateHandlerDeps['saveTasks'],
+  userId: string,
+  widget: Widget,
+  now: Date,
+): Promise<void> => {
+  const tasks = generatedTaskValues(widget, now);
+  if (saveTasks === undefined || tasks.length === 0) return;
+  try {
+    await saveTasks(userId, tasks);
+  } catch (error) {
+    logError('saving the card failed', error);
   }
 };
 
@@ -97,14 +121,16 @@ const tooManyRequests = ({ limit, reset }: RateLimitVerdict, now: Date): Respons
 
 /**
  * Builds the POST handler: validate the body, apply the caller's prompt limit and hourly allowance,
- * then stream a widget. Rejected requests (400, 413) do not use up the allowance.
+ * then stream a widget. Rejected requests (400, 413) do not use up the allowance. A signed-in
+ * user's finished TaskList is saved before the response ends.
  */
 export const createGenerateHandler =
   ({
     model,
     now = () => new Date(),
     identify = guest,
-    saveUser = skipSave,
+    saveUser,
+    saveTasks,
     checkRateLimit = noRateLimit,
   }: GenerateHandlerDeps = {}) =>
   async (request: Request): Promise<Response> => {
@@ -123,12 +149,17 @@ export const createGenerateHandler =
       ip: clientIp(request.headers),
     });
     if (blocked !== null) return tooManyRequests(blocked, now());
-    if (clerkUserId !== null) await saveSignedInUser(saveUser, clerkUserId, timeZone);
+    const userId =
+      clerkUserId === null ? null : await saveSignedInUser(saveUser, { clerkUserId, timeZone });
     return streamWidget({
       prompt,
       today: formatPromptDate(now(), timeZone),
       model,
       abortSignal: request.signal,
       onError: logStreamError,
+      onWidget:
+        userId === null
+          ? undefined
+          : ({ widget }) => saveGeneratedTasks(saveTasks, userId, widget, now()),
     });
   };

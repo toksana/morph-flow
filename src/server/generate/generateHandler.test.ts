@@ -5,6 +5,7 @@ import { buildHabitStreakCard } from '@/core/test/factories/habitStreakCard.fact
 import { buildTaskList } from '@/core/test/factories/taskList.factory';
 import { GUEST_PROMPT_LIMIT, USER_PROMPT_LIMIT } from '@/core/constants';
 import { widgetResponseSchema } from '@/core/widgets/widget.schema';
+import { generatedTaskValues } from '@/server/db/taskValues';
 import type { CheckRateLimit } from '@/server/rateLimit/caller';
 
 import { mockFailingModel, mockStreamingModel, splitIntoDeltas } from '../test/mockLanguageModel';
@@ -172,7 +173,7 @@ describe('createGenerateHandler', () => {
         'America/New_York',
         'Asia/Kolkata',
       ]);
-      const saveUser = vi.fn(async () => undefined);
+      const saveUser = vi.fn(async () => faker.string.uuid());
       const handler = createGenerateHandler({
         model: streamingModel(),
         identify: async () => clerkUserId,
@@ -189,7 +190,7 @@ describe('createGenerateHandler', () => {
 
     it('does not save a guest', async () => {
       // Arrange
-      const saveUser = vi.fn(async () => undefined);
+      const saveUser = vi.fn(async () => faker.string.uuid());
       const handler = createGenerateHandler({
         model: streamingModel(),
         identify: async () => null,
@@ -242,6 +243,134 @@ describe('createGenerateHandler', () => {
     });
   });
 
+  describe('saving the card', () => {
+    const buildClerkUserId = (): string => `user_${faker.string.alphanumeric(24)}`;
+
+    const signedInHandler = (
+      widget: ReturnType<typeof buildRandomResponse>['widget'],
+      deps: Parameters<typeof createGenerateHandler>[0] = {},
+    ) =>
+      createGenerateHandler({
+        model: mockStreamingModel(splitIntoDeltas(JSON.stringify({ widget }), pickLength)),
+        identify: async () => buildClerkUserId(),
+        ...deps,
+      });
+
+    it("saves a signed-in user's finished TaskList under their users.id, in order", async () => {
+      // Arrange
+      const userId = faker.string.uuid();
+      const now = faker.date.recent();
+      const widget = buildTaskList();
+      const saveTasks = vi.fn(async () => undefined);
+      const handler = signedInHandler(widget, {
+        now: () => now,
+        saveUser: async () => userId,
+        saveTasks,
+      });
+
+      // Act
+      const response = await handler(postPrompt(faker.lorem.sentence()));
+      await response.text();
+
+      // Assert
+      expect(saveTasks).toHaveBeenCalledExactlyOnceWith(userId, generatedTaskValues(widget, now));
+    });
+
+    it('ends the response only after the tasks are saved', async () => {
+      // Arrange
+      const events: string[] = [];
+      const saveTasks = async (): Promise<void> => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        events.push('saved');
+      };
+      const handler = signedInHandler(buildTaskList(), {
+        saveUser: async () => faker.string.uuid(),
+        saveTasks,
+      });
+
+      // Act
+      const response = await handler(postPrompt(faker.lorem.sentence()));
+      await response.text();
+      events.push('response ended');
+
+      // Assert
+      expect(events).toEqual(['saved', 'response ended']);
+    });
+
+    it("does not save a guest's card", async () => {
+      // Arrange
+      const saveTasks = vi.fn(async () => undefined);
+      const handler = signedInHandler(buildTaskList(), {
+        identify: async () => null,
+        saveUser: async () => faker.string.uuid(),
+        saveTasks,
+      });
+
+      // Act
+      const response = await handler(postPrompt(faker.lorem.sentence()));
+      await response.text();
+
+      // Assert
+      expect(saveTasks).not.toHaveBeenCalled();
+    });
+
+    it('saves nothing for a widget without a table yet', async () => {
+      // Arrange
+      const saveTasks = vi.fn(async () => undefined);
+      const handler = signedInHandler(buildHabitStreakCard(), {
+        saveUser: async () => faker.string.uuid(),
+        saveTasks,
+      });
+
+      // Act
+      const response = await handler(postPrompt(faker.lorem.sentence()));
+      await response.text();
+
+      // Assert
+      expect(saveTasks).not.toHaveBeenCalled();
+    });
+
+    it('saves no tasks when saving the user failed, since there is no owner id', async () => {
+      // Arrange
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const saveTasks = vi.fn(async () => undefined);
+      const handler = signedInHandler(buildTaskList(), {
+        saveUser: async () => {
+          throw new Error(faker.lorem.sentence());
+        },
+        saveTasks,
+      });
+
+      // Act
+      const response = await handler(postPrompt(faker.lorem.sentence()));
+      await response.text();
+
+      // Assert
+      expect(saveTasks).not.toHaveBeenCalled();
+    });
+
+    it('still streams the whole card when saving it fails, and logs why', async () => {
+      // Arrange
+      const message = faker.lorem.sentence();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const widget = buildTaskList();
+      const handler = signedInHandler(widget, {
+        saveUser: async () => faker.string.uuid(),
+        saveTasks: async () => {
+          throw new Error(message);
+        },
+      });
+
+      // Act
+      const response = await handler(postPrompt(faker.lorem.sentence()));
+      const text = await response.text();
+
+      // Assert
+      expect(widgetResponseSchema.parse(JSON.parse(text))).toEqual({ widget });
+      expect(consoleError).toHaveBeenCalledWith('[generate] saving the card failed:', message);
+    });
+  });
+
   describe('prompt limit', () => {
     const promptOf = (length: number): string => faker.string.alpha({ length });
     const signedIn = async (): Promise<string> => `user_${faker.string.alphanumeric(24)}`;
@@ -281,7 +410,7 @@ describe('createGenerateHandler', () => {
     it("rejects a signed-in user's prompt past the user limit with 413", async () => {
       // Arrange
       const model = mockStreamingModel([]);
-      const saveUser = vi.fn(async () => undefined);
+      const saveUser = vi.fn(async () => faker.string.uuid());
       const length = faker.number.int({ min: USER_PROMPT_LIMIT + 1, max: USER_PROMPT_LIMIT * 2 });
       const handler = createGenerateHandler({ model, identify: signedIn, saveUser });
 
@@ -350,7 +479,7 @@ describe('createGenerateHandler', () => {
       const reset = now.getTime() + waitSeconds * 1000;
       const limit = faker.number.int({ min: 1, max: 50 });
       const model = mockStreamingModel([]);
-      const saveUser = vi.fn(async () => undefined);
+      const saveUser = vi.fn(async () => faker.string.uuid());
       const handler = createGenerateHandler({
         model,
         now: () => now,

@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 
 import { getDb } from '@/server/db/client';
+import { upsertTasks } from '@/server/db/tasks';
 import { upsertUser } from '@/server/db/users';
 import { createGenerateHandler } from '@/server/generate/generateHandler';
 import { createUpstashRateLimit } from '@/server/rateLimit/upstashRateLimit';
@@ -13,6 +14,10 @@ if (checkRateLimit === null) {
 
 export const POST = createGenerateHandler({
   identify: async () => (await auth()).userId,
-  saveUser: (identity) => upsertUser(getDb(), identity),
+  // `async` turns a synchronous throw from getDb() (no DATABASE_URL) into a rejection.
+  saveUser: async (identity) => upsertUser(getDb(), identity),
+  saveTasks: async (userId, tasks) => {
+    await upsertTasks(getDb(), userId, tasks);
+  },
   checkRateLimit: checkRateLimit ?? undefined,
 });

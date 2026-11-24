@@ -1,0 +1,53 @@
+import { faker } from '@faker-js/faker';
+import { eq } from 'drizzle-orm';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { buildClerkUserId } from '../test/dbUsers';
+import { getDb } from './client';
+import { users } from './tables/users';
+import { upsertUser } from './users';
+
+const TIME_ZONES = ['Europe/Berlin', 'Asia/Tokyo', 'America/New_York'] as const;
+
+describe('upsertUser', () => {
+  const clerkUserIds: string[] = [];
+
+  afterEach(async () => {
+    await Promise.all(
+      clerkUserIds.splice(0).map((id) => getDb().delete(users).where(eq(users.clerkUserId, id))),
+    );
+  });
+
+  it('returns the same id on every call and keeps the latest time zone', async () => {
+    // Arrange
+    const clerkUserId = buildClerkUserId();
+    clerkUserIds.push(clerkUserId);
+    const [first, second] = faker.helpers.arrayElements(TIME_ZONES, 2);
+
+    // Act
+    const createdId = await upsertUser(getDb(), { clerkUserId, timeZone: first });
+    const againId = await upsertUser(getDb(), { clerkUserId, timeZone: second });
+
+    // Assert
+    const [row] = await getDb().select().from(users).where(eq(users.clerkUserId, clerkUserId));
+    expect(againId).toBe(createdId);
+    expect(row.id).toBe(createdId);
+    expect(row.timeZone).toBe(second);
+  });
+
+  it('leaves updated_at alone when the time zone has not changed', async () => {
+    // Arrange
+    const clerkUserId = buildClerkUserId();
+    clerkUserIds.push(clerkUserId);
+    const timeZone = faker.helpers.arrayElement(TIME_ZONES);
+    await upsertUser(getDb(), { clerkUserId, timeZone });
+    const [before] = await getDb().select().from(users).where(eq(users.clerkUserId, clerkUserId));
+
+    // Act
+    await upsertUser(getDb(), { clerkUserId, timeZone });
+
+    // Assert
+    const [after] = await getDb().select().from(users).where(eq(users.clerkUserId, clerkUserId));
+    expect(after.updatedAt).toEqual(before.updatedAt);
+  });
+});

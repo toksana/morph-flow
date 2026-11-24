@@ -11,10 +11,11 @@ fills in live while the model is still writing it.
 > **🚧 Status: work in progress.**
 >
 > **Works now:** a TaskList or HabitStreakCard from one prompt, streaming in live; optional
-> sign-in with Clerk; hourly generation limits for guests and signed-in users.
+> sign-in with Clerk; hourly generation limits for guests and signed-in users; a signed-in
+> user's generated tasks are saved to Postgres.
 >
-> **Next:** saving cards (to Postgres for signed-in users, in the browser for guests), then
-> editing saved cards and more widget types.
+> **Next:** showing and editing saved tasks, saving habits, keeping a guest's cards in the
+> browser, then more widget types.
 
 ## Widgets
 
@@ -56,6 +57,10 @@ sequenceDiagram
   API->>LLM: streamText + Output.object(widget union schema), system prompt for the user's "today"
   LLM-->>API: JSON tokens
   API-->>UI: text stream of partial JSON
+  opt signed in, finished TaskList (onEnd)
+    API->>DB: upsert tasks in the card's order (a failure is logged)
+  end
+  API-->>UI: end of stream, after the save settles
   UI->>UI: parse partial JSON → WidgetRenderer switches on widget.type
 ```
 
@@ -92,7 +97,7 @@ Only the model credentials are required. Everything else can stay empty for a fi
 | ------------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------- |
 | `AI_GATEWAY_API_KEY`                                    | **Yes** (or a Vercel OIDC token) | Generation fails.                                                    |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | For `build` / `start` / e2e      | `pnpm dev` runs Clerk in keyless mode with a temporary dev instance. |
-| `DATABASE_URL`                                          | To save signed-in users          | Cards still generate; saving the signed-in user fails and is logged. |
+| `DATABASE_URL`                                          | To save signed-in users' cards   | Cards still generate; saving fails and is logged.                    |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN`                  | No                               | The rate limit turns itself off and the server logs a warning.       |
 
 - **Model:** the app calls the model through [Vercel AI Gateway](https://vercel.com/docs/ai-gateway).
@@ -111,20 +116,21 @@ pnpm dev
 
 ## Scripts
 
-| Command             | What it does                    |
-| ------------------- | ------------------------------- |
-| `pnpm dev`          | Dev server with Turbopack       |
-| `pnpm build`        | Production build                |
-| `pnpm start`        | Serve the production build      |
-| `pnpm test`         | Run all tests once (Vitest)     |
-| `pnpm test:watch`   | Tests in watch mode             |
-| `pnpm test:e2e`     | Playwright end-to-end tests     |
-| `pnpm typecheck`    | `next typegen` + `tsc --noEmit` |
-| `pnpm lint`         | ESLint                          |
-| `pnpm format:check` | Prettier check (`format` fixes) |
-| `pnpm db:generate`  | Drizzle migration from schema   |
-| `pnpm db:migrate`   | Apply migrations to the DB      |
-| `pnpm db:studio`    | Drizzle Studio                  |
+| Command             | What it does                     |
+| ------------------- | -------------------------------- |
+| `pnpm dev`          | Dev server with Turbopack        |
+| `pnpm build`        | Production build                 |
+| `pnpm start`        | Serve the production build       |
+| `pnpm test`         | Unit and component tests once    |
+| `pnpm test:db`      | SQL tests on the Neon dev branch |
+| `pnpm test:watch`   | Tests in watch mode              |
+| `pnpm test:e2e`     | Playwright end-to-end tests      |
+| `pnpm typecheck`    | `next typegen` + `tsc --noEmit`  |
+| `pnpm lint`         | ESLint                           |
+| `pnpm format:check` | Prettier check (`format` fixes)  |
+| `pnpm db:generate`  | Drizzle migration from schema    |
+| `pnpm db:migrate`   | Apply migrations to the DB       |
+| `pnpm db:studio`    | Drizzle Studio                   |
 
 ## Project structure
 
@@ -134,7 +140,8 @@ src/
                No React, Next.js, DOM or Node imports (enforced by ESLint), so it can become
                a shared package for a React Native app later.
   server/      The generate handler and the streaming call to the model.
-    db/        Drizzle schema, Neon client, user upsert. Migrations live in /drizzle.
+    db/        Drizzle schema, Neon client, users and tasks repositories. Migrations live
+               in /drizzle.
     rateLimit/ Upstash sliding-window limiter, keyed by Clerk user id or client IP.
   proxy.ts     Clerk middleware: attaches the session, keeps every route public.
   app/         Next.js routes: the page and /api/generate.
@@ -167,7 +174,11 @@ Tests sit next to the code (`foo.ts` → `foo.test.ts`) and use `@faker-js/faker
 (`src/server/test/mockLanguageModel.ts`), and the generator UI with a fetch stub that streams the
 response chunk by chunk. No test calls the real model.
 
-`pnpm test` runs Vitest. `pnpm test:e2e` runs Playwright (`e2e/`) against a production build on
+`pnpm test` runs Vitest and needs no network. `pnpm test:db` runs the repository tests
+(`*.db.test.ts`) against real Postgres: it takes `DATABASE_URL` from `.env.development.local`
+only, so it can never reach production, and every test deletes the users it created.
+
+`pnpm test:e2e` runs Playwright (`e2e/`) against a production build on
 port 3100. It points the browser at a local mock that streams the response chunk by chunk, so it
 checks the card building up, finishing, and being dropped by **New** without calling the model.
 The first run needs a browser: `pnpm exec playwright install chromium`.
