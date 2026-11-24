@@ -1,4 +1,5 @@
-import type { Task } from '@/core/widgets/taskList.schema';
+import { TASK_LIST_TYPE, type Task } from '@/core/widgets/taskList.schema';
+import type { Widget } from '@/core/widgets/widget.schema';
 
 import type { NewTaskRow } from './tables/tasks';
 
@@ -16,3 +17,10 @@ export const toTaskValues = (task: Task, now: Date): TaskValues => ({
   dueDate: task.due ?? null,
   completedAt: task.done ? now : null,
 });
+
+/**
+ * The row values to save for a generated widget: a TaskList's tasks in the model's order, nothing
+ * for other widgets (they have no table yet).
+ */
+export const generatedTaskValues = (widget: Widget, now: Date): TaskValues[] =>
+  widget.type === TASK_LIST_TYPE ? widget.tasks.map((task) => toTaskValues(task, now)) : [];

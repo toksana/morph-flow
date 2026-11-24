@@ -14,6 +14,10 @@ export const buildClerkUserId = (): string => `user_test_${faker.string.alphanum
 export const createTestUsers = () => {
   const created: string[] = [];
   return {
+    /** Registers a user created elsewhere (e.g. by the handler) for cleanup. */
+    track: (id: string): void => {
+      created.push(id);
+    },
     create: async (): Promise<string> => {
       const id = await upsertUser(getDb(), { clerkUserId: buildClerkUserId(), timeZone: 'UTC' });
       created.push(id);

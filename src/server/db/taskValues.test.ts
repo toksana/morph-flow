@@ -1,9 +1,10 @@
 import { faker } from '@faker-js/faker';
 import { describe, expect, it } from 'vitest';
 
-import { buildTask } from '@/core/test/factories/taskList.factory';
+import { buildHabitStreakCard } from '@/core/test/factories/habitStreakCard.factory';
+import { buildTask, buildTaskList } from '@/core/test/factories/taskList.factory';
 
-import { toTaskValues } from './taskValues';
+import { generatedTaskValues, toTaskValues } from './taskValues';
 
 const RANDOM_RUNS = 20;
 
@@ -48,5 +49,27 @@ describe('toTaskValues', () => {
 
     // Assert
     expect(values.title).toBe(title);
+  });
+});
+
+describe('generatedTaskValues', () => {
+  it("maps every task of a TaskList, in the model's order", () => {
+    // Arrange
+    const now = faker.date.recent();
+    const taskList = buildTaskList();
+
+    // Act
+    const values = generatedTaskValues(taskList, now);
+
+    // Assert
+    expect(values).toEqual(taskList.tasks.map((task) => toTaskValues(task, now)));
+  });
+
+  it('gives nothing to save for a widget without a table', () => {
+    // Act
+    const values = generatedTaskValues(buildHabitStreakCard(), faker.date.recent());
+
+    // Assert
+    expect(values).toEqual([]);
   });
 });

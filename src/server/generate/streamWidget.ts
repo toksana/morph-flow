@@ -8,7 +8,7 @@ import {
 } from 'ai';
 
 import type { WidgetDefinition } from '@/core/widgets/widgetDefinition';
-import { WIDGETS, widgetResponseSchema } from '@/core/widgets/widget.schema';
+import { WIDGETS, type WidgetResponse, widgetResponseSchema } from '@/core/widgets/widget.schema';
 
 export const WIDGET_MODEL: GatewayModelId = 'anthropic/claude-haiku-5.5';
 
@@ -47,6 +47,11 @@ interface StreamWidgetOptions {
   /** Aborts the model call, e.g. when the client stops the request. */
   abortSignal?: AbortSignal;
   onError?: (error: unknown) => void;
+  /**
+   * Gets the complete widget once the model is done; not called if the request was aborted or
+   * the output does not match the schema. The response stream stays open until it settles.
+   */
+  onWidget?: (response: WidgetResponse) => Promise<void>;
 }
 
 /** Streams `{ widget }` as partial JSON text, the format `useObject` consumes. */
@@ -56,6 +61,7 @@ export const streamWidget = ({
   model = WIDGET_MODEL,
   abortSignal,
   onError,
+  onWidget,
 }: StreamWidgetOptions): Response => {
   const result = streamText({
     model,
@@ -65,6 +71,9 @@ export const streamWidget = ({
     maxOutputTokens: MAX_OUTPUT_TOKENS,
     abortSignal,
     onError: ({ error }) => onError?.(error),
+    onEnd: async ({ output }) => {
+      if (output !== undefined) await onWidget?.(output);
+    },
   });
 
   return createTextStreamResponse({ stream: toTextStream({ stream: result.stream }) });

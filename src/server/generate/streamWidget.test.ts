@@ -1,9 +1,11 @@
 import { faker } from '@faker-js/faker';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { buildTaskList } from '@/core/test/factories/taskList.factory';
 import { WIDGETS } from '@/core/widgets/widget.schema';
 
-import { buildWidgetSystemPrompt } from './streamWidget';
+import { mockStreamingModel } from '../test/mockLanguageModel';
+import { buildWidgetSystemPrompt, streamWidget } from './streamWidget';
 
 const ISO_DATE_LENGTH = 'YYYY-MM-DD'.length;
 const TODAY = 'Thursday, 2026-11-19';
@@ -51,5 +53,42 @@ describe('buildWidgetSystemPrompt', () => {
       expect(prompt).toContain(`For a ${widget.type}:\n${widget.rules.join('\n')}`);
     });
     WIDGETS.forEach((widget) => expect(prompt).not.toContain(widget.whenToUse));
+  });
+});
+
+describe('streamWidget', () => {
+  it('hands the complete widget to onWidget', async () => {
+    // Arrange
+    const response = { widget: buildTaskList() };
+    const onWidget = vi.fn(async () => undefined);
+
+    // Act
+    const streamed = streamWidget({
+      prompt: faker.lorem.sentence(),
+      today: TODAY,
+      model: mockStreamingModel([JSON.stringify(response)]),
+      onWidget,
+    });
+    await streamed.text();
+
+    // Assert
+    expect(onWidget).toHaveBeenCalledExactlyOnceWith(response);
+  });
+
+  it('does not call onWidget when the output does not match the schema', async () => {
+    // Arrange
+    const onWidget = vi.fn(async () => undefined);
+
+    // Act
+    const streamed = streamWidget({
+      prompt: faker.lorem.sentence(),
+      today: TODAY,
+      model: mockStreamingModel([JSON.stringify({ widget: { type: buildTaskList().type } })]),
+      onWidget,
+    });
+    await streamed.text();
+
+    // Assert
+    expect(onWidget).not.toHaveBeenCalled();
   });
 });

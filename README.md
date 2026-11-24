@@ -11,10 +11,11 @@ fills in live while the model is still writing it.
 > **🚧 Status: work in progress.**
 >
 > **Works now:** a TaskList or HabitStreakCard from one prompt, streaming in live; optional
-> sign-in with Clerk; hourly generation limits for guests and signed-in users.
+> sign-in with Clerk; hourly generation limits for guests and signed-in users; a signed-in
+> user's generated tasks are saved to Postgres.
 >
-> **Next:** saving cards (to Postgres for signed-in users, in the browser for guests), then
-> editing saved cards and more widget types.
+> **Next:** showing and editing saved tasks, saving habits, keeping a guest's cards in the
+> browser, then more widget types.
 
 ## Widgets
 
@@ -56,6 +57,10 @@ sequenceDiagram
   API->>LLM: streamText + Output.object(widget union schema), system prompt for the user's "today"
   LLM-->>API: JSON tokens
   API-->>UI: text stream of partial JSON
+  opt signed in, finished TaskList (onEnd)
+    API->>DB: upsert tasks in the card's order (a failure is logged)
+  end
+  API-->>UI: end of stream, after the save settles
   UI->>UI: parse partial JSON → WidgetRenderer switches on widget.type
 ```
 
@@ -92,7 +97,7 @@ Only the model credentials are required. Everything else can stay empty for a fi
 | ------------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------- |
 | `AI_GATEWAY_API_KEY`                                    | **Yes** (or a Vercel OIDC token) | Generation fails.                                                    |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | For `build` / `start` / e2e      | `pnpm dev` runs Clerk in keyless mode with a temporary dev instance. |
-| `DATABASE_URL`                                          | To save signed-in users          | Cards still generate; saving the signed-in user fails and is logged. |
+| `DATABASE_URL`                                          | To save signed-in users' cards   | Cards still generate; saving fails and is logged.                    |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN`                  | No                               | The rate limit turns itself off and the server logs a warning.       |
 
 - **Model:** the app calls the model through [Vercel AI Gateway](https://vercel.com/docs/ai-gateway).
