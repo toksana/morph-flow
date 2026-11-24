@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { buildClerkUserId } from '../test/dbUsers';
 import { getDb } from './client';
 import { users } from './tables/users';
-import { upsertUser } from './users';
+import { findUserId, upsertUser } from './users';
 
 const TIME_ZONES = ['Europe/Berlin', 'Asia/Tokyo', 'America/New_York'] as const;
 
@@ -49,5 +49,44 @@ describe('upsertUser', () => {
     // Assert
     const [after] = await getDb().select().from(users).where(eq(users.clerkUserId, clerkUserId));
     expect(after.updatedAt).toEqual(before.updatedAt);
+  });
+});
+
+describe('findUserId', () => {
+  const clerkUserIds: string[] = [];
+
+  afterEach(async () => {
+    await Promise.all(
+      clerkUserIds.splice(0).map((id) => getDb().delete(users).where(eq(users.clerkUserId, id))),
+    );
+  });
+
+  it("returns the id upsertUser gave the user's row", async () => {
+    // Arrange
+    const clerkUserId = buildClerkUserId();
+    clerkUserIds.push(clerkUserId);
+    const id = await upsertUser(getDb(), {
+      clerkUserId,
+      timeZone: faker.helpers.arrayElement(TIME_ZONES),
+    });
+
+    // Act
+    const found = await findUserId(getDb(), clerkUserId);
+
+    // Assert
+    expect(found).toBe(id);
+  });
+
+  it('returns null and creates no row for a user who has never generated a card', async () => {
+    // Arrange
+    const clerkUserId = buildClerkUserId();
+
+    // Act
+    const found = await findUserId(getDb(), clerkUserId);
+
+    // Assert
+    const rows = await getDb().select().from(users).where(eq(users.clerkUserId, clerkUserId));
+    expect(found).toBeNull();
+    expect(rows).toEqual([]);
   });
 });

@@ -62,3 +62,22 @@ export const softDeleteTask = async (
     .returning({ id: tasks.id });
   return deleted.length > 0;
 };
+
+/**
+ * Ticks the user's live task off, or opens it again. Ticking an already done task keeps its
+ * original `completed_at`, so a repeated request (a retry, a second device) changes nothing.
+ * @returns false if there is no such live task for this user
+ */
+export const setTaskCompleted = async (
+  db: Database,
+  userId: string,
+  taskId: string,
+  done: boolean,
+): Promise<boolean> => {
+  const updated = await db
+    .update(tasks)
+    .set({ completedAt: done ? sql`coalesce(${tasks.completedAt}, now())` : null })
+    .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId), isNull(tasks.deletedAt)))
+    .returning({ id: tasks.id });
+  return updated.length > 0;
+};
