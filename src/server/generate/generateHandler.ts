@@ -8,8 +8,6 @@ import {
   type RateLimitBody,
   retryAfterSeconds,
 } from '@/core/widgets/rateLimit';
-import type { Widget } from '@/core/widgets/widget.schema';
-import { type TaskValues, generatedTaskValues } from '@/server/db/taskValues';
 import type { UserIdentity } from '@/server/db/users';
 import {
   type CheckRateLimit,
@@ -19,13 +17,14 @@ import {
 } from '@/server/rateLimit/caller';
 
 import { createLogError } from '../logError';
+import { type CardStores, createSaveGeneratedCard } from './saveGeneratedCard';
 import { streamWidget } from './streamWidget';
 
 const INVALID_REQUEST_STATUS = 400;
 const PROMPT_TOO_LONG_STATUS = 413;
 const TOO_MANY_REQUESTS_STATUS = 429;
 
-interface GenerateHandlerDeps {
+interface GenerateHandlerDeps extends CardStores {
   /** Defaults to the AI Gateway model; tests pass a mock. */
   model?: LanguageModel;
   /** Clock for "today" in the prompt; injected so tests are deterministic. */
@@ -34,8 +33,6 @@ interface GenerateHandlerDeps {
   identify?: () => Promise<string | null>;
   /** Stores the signed-in caller's row and returns its `users.id`; skipped for guests. */
   saveUser?: (identity: UserIdentity) => Promise<string>;
-  /** Stores a signed-in user's generated tasks, in order; the database hands out their ids. */
-  saveTasks?: (userId: string, tasks: readonly TaskValues[]) => Promise<void>;
   /** Counts the request against the caller's hourly allowance. Defaults to no limit. */
   checkRateLimit?: CheckRateLimit;
 }
@@ -74,22 +71,6 @@ const saveSignedInUser = async (
   }
 };
 
-/** Saves the finished card's tasks. Runs after the card is on screen, so a failure is only logged. */
-const saveGeneratedTasks = async (
-  saveTasks: GenerateHandlerDeps['saveTasks'],
-  userId: string,
-  widget: Widget,
-  now: Date,
-): Promise<void> => {
-  const tasks = generatedTaskValues(widget, now);
-  if (saveTasks === undefined || tasks.length === 0) return;
-  try {
-    await saveTasks(userId, tasks);
-  } catch (error) {
-    logError('saving the card failed', error);
-  }
-};
-
 /**
  * The verdict when the caller is over their allowance, otherwise null. If the limiter itself
  * fails (e.g. Redis is down), the request goes through: the site keeps working, and the prompt
@@ -117,18 +98,19 @@ const tooManyRequests = ({ limit, reset }: RateLimitVerdict, now: Date): Respons
 /**
  * Builds the POST handler: validate the body, apply the caller's prompt limit and hourly allowance,
  * then stream a widget. Rejected requests (400, 413) do not use up the allowance. A signed-in
- * user's finished TaskList is saved before the response ends.
+ * user's finished card (a TaskList's tasks or a habit) is saved before the response ends.
  */
-export const createGenerateHandler =
-  ({
-    model,
-    now = () => new Date(),
-    identify = guest,
-    saveUser,
-    saveTasks,
-    checkRateLimit = noRateLimit,
-  }: GenerateHandlerDeps = {}) =>
-  async (request: Request): Promise<Response> => {
+export const createGenerateHandler = ({
+  model,
+  now = () => new Date(),
+  identify = guest,
+  saveUser,
+  saveTasks,
+  saveHabit,
+  checkRateLimit = noRateLimit,
+}: GenerateHandlerDeps = {}) => {
+  const saveGeneratedCard = createSaveGeneratedCard({ saveTasks, saveHabit });
+  return async (request: Request): Promise<Response> => {
     const parsed = generateRequestSchema.safeParse(await readJson(request));
     if (!parsed.success) {
       return Response.json({ error: 'Invalid request' }, { status: INVALID_REQUEST_STATUS });
@@ -155,6 +137,7 @@ export const createGenerateHandler =
       onWidget:
         userId === null
           ? undefined
-          : ({ widget }) => saveGeneratedTasks(saveTasks, userId, widget, now()),
+          : ({ widget }) => saveGeneratedCard({ userId, widget, now: now(), timeZone }),
     });
   };
+};
