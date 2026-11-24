@@ -3,9 +3,8 @@ import type { JSX } from 'react';
 
 import type { HabitStreakView } from '@/core/widgets/habitStreakCard.view';
 import { Badge } from '@/components/ui/badge';
-import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-import { WidgetIconTile } from '../WidgetIconTile';
+import { WidgetCardHeader } from '../WidgetCardHeader';
 
 const CARD_LABEL = 'Habit streak';
 
@@ -13,24 +12,20 @@ interface HabitStreakHeaderProps {
   view: HabitStreakView;
 }
 
-/**
- * Emoji (or a flame), the habit name and, once it has streamed, the target badge.
- * A flex row instead of CardAction: CardHeader's grid would put the badge over the title column.
- */
+/** Emoji (or a flame), the habit name and, once it has streamed, the target badge. */
 export const HabitStreakHeader = ({ view }: HabitStreakHeaderProps): JSX.Element => (
-  <CardHeader className="flex items-center gap-3">
-    <WidgetIconTile type="HabitStreakCard">{view.emoji}</WidgetIconTile>
-    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-      <CardDescription className="font-mono text-xs tracking-widest uppercase">
-        {CARD_LABEL}
-      </CardDescription>
-      {view.title !== '' && <CardTitle className="truncate">{view.title}</CardTitle>}
-    </div>
-    {view.hasProgress && (
-      <Badge variant="outline" className="shrink-0 font-mono">
-        <Target aria-hidden />
-        Target: {view.targetDays}d
-      </Badge>
-    )}
-  </CardHeader>
+  <WidgetCardHeader
+    type="HabitStreakCard"
+    label={CARD_LABEL}
+    title={view.title}
+    icon={view.emoji}
+    trailing={
+      view.hasProgress && (
+        <Badge variant="outline" className="shrink-0 font-mono">
+          <Target aria-hidden />
+          Target: {view.targetDays}d
+        </Badge>
+      )
+    }
+  />
 );
