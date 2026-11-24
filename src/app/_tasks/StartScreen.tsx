@@ -2,6 +2,7 @@ import { type JSX, Suspense } from 'react';
 
 import { WidgetGenerator } from '@/components/generator/WidgetGenerator';
 import { Hero } from '@/components/landing/Hero';
+import { SavedCardsSkeleton } from '@/components/savedCards/SavedCardsSkeleton';
 
 import { identifyCaller } from './deps';
 import { SavedCards } from './SavedCards';
@@ -18,8 +19,9 @@ export const StartScreen = async (): Promise<JSX.Element> => {
     <WidgetGenerator
       layout="top"
       start={
-        // The cards need the database; the field above them does not wait for it.
-        <Suspense fallback={null}>
+        // The cards need the database; the field above them does not wait for it, and their
+        // skeleton holds the place meanwhile.
+        <Suspense fallback={<SavedCardsSkeleton />}>
           <SavedCards />
         </Suspense>
       }
