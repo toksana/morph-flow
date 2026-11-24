@@ -9,7 +9,7 @@ export const checkInLabel = (title: string): string => `Check in: ${title}`;
 const OPEN_CLASSES =
   'rounded-full text-muted-foreground hover:border-emerald-500/60 hover:bg-emerald-500/10 hover:text-emerald-600 dark:hover:text-emerald-400';
 const DONE_CLASSES =
-  'rounded-full border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-600 dark:border-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-600';
+  'rounded-full border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-600 hover:text-white dark:border-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-600';
 
 interface HabitCheckInButtonProps {
   title: string;
