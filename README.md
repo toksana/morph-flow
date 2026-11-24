@@ -12,17 +12,20 @@ fills in live while the model is still writing it.
 >
 > **Works now:** a TaskList or HabitStreakCard from one prompt, streaming in live; optional
 > sign-in with Clerk; hourly generation limits for guests and signed-in users; a signed-in
-> user's generated tasks are saved to Postgres.
+> user's generated tasks are saved to Postgres and listed on the start screen, where they can
+> be ticked off.
 >
-> **Next:** showing and editing saved tasks, saving habits, keeping a guest's cards in the
-> browser, then more widget types.
+> **Next:** editing and deleting saved tasks, saving habits, keeping a guest's cards in the
+> browser, then more widget types. Before a wider launch: a Clerk production instance on our own
+> domain (the demo runs on development keys) and the database migrations in production.
 
 ## Widgets
 
 The model picks one of these from the prompt:
 
 - **TaskList:** _"My tasks for tomorrow: workout, finish the report, call mom"_ → tasks with due
-  dates and priorities, streamed in row by row.
+  dates and priorities, streamed in row by row. Signed in, the tasks are saved and show up under
+  **Your tasks** on the start screen.
 - **HabitStreakCard:** _"Drink 2 liters of water every day for a month"_ → a streak toward a goal,
   with a check-in button that works as soon as the card is complete.
 
@@ -76,6 +79,40 @@ sequenceDiagram
   Redis is down, the request goes through and the prompt limit still caps its cost.
 - **Errors stay on the server.** The client shows a generic message. Details go to the server log.
 
+### Saved tasks
+
+A guest's start screen pitches the app: hero, centered field, examples. A signed-in user already
+knows it, so they get the name in the navbar, the field at the top and their saved tasks right
+below it, on the first screen. Until they have any, the examples take that place. Ticking a task
+off shows at once and is saved in the background:
+
+```mermaid
+sequenceDiagram
+  participant UI as Browser
+  participant RSC as Server Component (in Suspense)
+  participant SA as Server Action toggleTaskAction
+  participant DB as Neon Postgres
+
+  UI->>RSC: GET / (Clerk session)
+  RSC->>DB: find the user, list their live tasks
+  RSC-->>UI: "Your tasks" (the examples if there are none yet, or if the read fails)
+  UI->>UI: tick: useOptimistic shows it at once
+  UI->>SA: { taskId, done }
+  SA->>SA: validate with Zod, check the session
+  SA->>DB: set completed_at, only on the caller's own live task
+  SA-->>UI: ok → refresh(): the list re-renders from the database
+  Note over UI: not saved → the tick rolls back and an alert says so
+```
+
+- **Most urgent first.** The card shows the open tasks with the nearest due date, then the
+  highest priority: 5 of them, or 3 on a phone (by CSS, so there is no hydration mismatch).
+  **Show all** lists every task, done ones last.
+- **Rows don't jump.** Each view keeps its rows from when it opened, so a ticked task stays in
+  place, struck through, until the next visit.
+- **New cards land there too.** When a card finishes streaming, the client refreshes the Server
+  Components. The server saved the tasks before the stream ended, so after **New** they are in
+  the list with their database ids. The streamed card itself stays read-only.
+
 ## Stack
 
 Next.js 16 (App Router) · React 19 · TypeScript (strict) · AI SDK 7 with Vercel AI Gateway ·
@@ -99,6 +136,7 @@ Only the model credentials are required. Everything else can stay empty for a fi
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | For `build` / `start` / e2e      | `pnpm dev` runs Clerk in keyless mode with a temporary dev instance. |
 | `DATABASE_URL`                                          | To save signed-in users' cards   | Cards still generate; saving fails and is logged.                    |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN`                  | No                               | The rate limit turns itself off and the server logs a warning.       |
+| `E2E_CLERK_USER_EMAIL`                                  | No                               | e2e signs in as `e2e+clerk_test@example.com`, created on first run.  |
 
 - **Model:** the app calls the model through [Vercel AI Gateway](https://vercel.com/docs/ai-gateway).
   Create an AI Gateway API key, or link the repo to a Vercel project (`vercel link`, then
@@ -140,15 +178,18 @@ src/
                No React, Next.js, DOM or Node imports (enforced by ESLint), so it can become
                a shared package for a React Native app later.
   server/      The generate handler and the streaming call to the model.
+    tasks/     Loading saved tasks and toggling one, with Clerk and the database injected.
     db/        Drizzle schema, Neon client, users and tasks repositories. Migrations live
                in /drizzle.
     rateLimit/ Upstash sliding-window limiter, keyed by Clerk user id or client IP.
   proxy.ts     Clerk middleware: attaches the session, keeps every route public.
-  app/         Next.js routes: the page and /api/generate.
-  hooks/       useWidgetStream (useObject wrapper) and useGeneratorSession (field, stream,
-               start screen ↔ canvas).
+  app/         Next.js routes: the page and /api/generate. actions/ holds the Server Actions,
+               _tasks/ the "Your tasks" Server Component and its Clerk/Neon wiring.
+  hooks/       useWidgetStream (useObject wrapper), useGeneratorSession (field, stream,
+               start screen ↔ canvas), and the saved list's optimistic tick and expansion.
   components/
     generator/ Prompt field, example presets, and WidgetRenderer.
+    savedTasks/ The "Your tasks" card: rows, Show all, the save-failed alert.
     widgets/   One folder per widget, plus shared accents and the header icon tile.
     landing/   The hero on the start screen.
     ui/        shadcn/ui primitives.
@@ -178,7 +219,14 @@ response chunk by chunk. No test calls the real model.
 (`*.db.test.ts`) against real Postgres: it takes `DATABASE_URL` from `.env.development.local`
 only, so it can never reach production, and every test deletes the users it created.
 
-`pnpm test:e2e` runs Playwright (`e2e/`) against a production build on
-port 3100. It points the browser at a local mock that streams the response chunk by chunk, so it
-checks the card building up, finishing, and being dropped by **New** without calling the model.
-The first run needs a browser: `pnpm exec playwright install chromium`.
+`pnpm test:e2e` runs Playwright (`e2e/`) against a fresh production build on port 3100. It points
+the browser at a local mock that streams the response chunk by chunk, so it checks the card
+building up, finishing, and being dropped by **New** without calling the model. The first run
+needs a browser: `pnpm exec playwright install chromium`.
+
+The saved-tasks specs sign in for real with `@clerk/testing`: a test user (see
+`E2E_CLERK_USER_EMAIL`) is created once in the Clerk dev instance and signed in with a
+server-side token. They need the Clerk keys and `.env.development.local`: the run takes
+`DATABASE_URL` from there only, for the tests and for the app under test, so it can only reach
+the Neon dev branch. Clerk Protect requests are blocked in the tests, since its probes never let
+the page go idle.

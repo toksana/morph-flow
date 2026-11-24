@@ -1,3 +1,5 @@
+import { eq } from 'drizzle-orm';
+
 import type { Database } from './client';
 import { users } from './tables/users';
 
@@ -23,4 +25,16 @@ export const upsertUser = async (
     .onConflictDoUpdate({ target: users.clerkUserId, set: { timeZone } })
     .returning({ id: users.id });
   return user.id;
+};
+
+/**
+ * The user's `users.id` for a Clerk id, without creating a row: reading tasks must not write.
+ * @returns null for a signed-in user who has never generated a card (no row yet, so no tasks)
+ */
+export const findUserId = async (db: Database, clerkUserId: string): Promise<string | null> => {
+  const [user] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.clerkUserId, clerkUserId));
+  return user?.id ?? null;
 };

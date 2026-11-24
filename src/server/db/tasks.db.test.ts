@@ -7,13 +7,20 @@ import { buildTask, buildTasks } from '@/core/test/factories/taskList.factory';
 import { createTestUsers } from '../test/dbUsers';
 import { getDb } from './client';
 import { tasks } from './tables/tasks';
-import { listTasks, softDeleteTask, upsertTasks } from './tasks';
+import { listTasks, setTaskCompleted, softDeleteTask, upsertTasks } from './tasks';
 import { toTaskValues } from './taskValues';
 
 const testUsers = createTestUsers();
 
 const buildValues = (count: number, now = faker.date.recent()) =>
   buildTasks(count).map((task) => toTaskValues(task, now));
+
+const saveOpenTask = async (userId: string): Promise<string> => {
+  const [id] = await upsertTasks(getDb(), userId, [
+    toTaskValues(buildTask({ done: false }), new Date()),
+  ]);
+  return id;
+};
 
 const readTask = async (id: string) => {
   const [row] = await getDb().select().from(tasks).where(eq(tasks.id, id));
@@ -142,5 +149,75 @@ describe('tasks repository', () => {
     // Assert
     expect(deleted).toBe(false);
     expect((await readTask(id)).deletedAt).toBeNull();
+  });
+
+  it('ticks a task off and keeps the first completion time when ticked again', async () => {
+    // Arrange
+    const userId = await testUsers.create();
+    const id = await saveOpenTask(userId);
+
+    // Act
+    const first = await setTaskCompleted(getDb(), userId, id, true);
+    const completedAt = (await readTask(id)).completedAt;
+    const again = await setTaskCompleted(getDb(), userId, id, true);
+
+    // Assert
+    expect(first).toBe(true);
+    expect(again).toBe(true);
+    expect(completedAt).toBeInstanceOf(Date);
+    expect((await readTask(id)).completedAt).toEqual(completedAt);
+  });
+
+  it('opens a done task again', async () => {
+    // Arrange
+    const userId = await testUsers.create();
+    const id = await saveOpenTask(userId);
+    await setTaskCompleted(getDb(), userId, id, true);
+
+    // Act
+    const reopened = await setTaskCompleted(getDb(), userId, id, false);
+
+    // Assert
+    expect(reopened).toBe(true);
+    expect((await readTask(id)).completedAt).toBeNull();
+  });
+
+  it("does not let a user tick off another user's task", async () => {
+    // Arrange
+    const owner = await testUsers.create();
+    const other = await testUsers.create();
+    const id = await saveOpenTask(owner);
+
+    // Act
+    const updated = await setTaskCompleted(getDb(), other, id, true);
+
+    // Assert
+    expect(updated).toBe(false);
+    expect((await readTask(id)).completedAt).toBeNull();
+  });
+
+  it('leaves a deleted task alone', async () => {
+    // Arrange
+    const userId = await testUsers.create();
+    const id = await saveOpenTask(userId);
+    await softDeleteTask(getDb(), userId, id);
+
+    // Act
+    const updated = await setTaskCompleted(getDb(), userId, id, true);
+
+    // Assert
+    expect(updated).toBe(false);
+    expect((await readTask(id)).completedAt).toBeNull();
+  });
+
+  it('returns false for an id that does not exist', async () => {
+    // Arrange
+    const userId = await testUsers.create();
+
+    // Act
+    const updated = await setTaskCompleted(getDb(), userId, faker.string.uuid(), true);
+
+    // Assert
+    expect(updated).toBe(false);
   });
 });

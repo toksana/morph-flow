@@ -11,6 +11,7 @@ import { TOO_MANY_REQUESTS_ERROR } from '@/core/widgets/rateLimit';
 import { WIDGETS } from '@/core/widgets/widget.schema';
 import { CHECK_IN_TEXT, UNDO_TEXT } from '@/components/widgets/habitStreakCard/CheckInButton';
 
+import { GeneratorPresets } from './GeneratorPresets';
 import { NEW_CARD_LABEL } from './NewCardButton';
 import { PROMPT_LABEL } from './PromptForm';
 import { PRESETS_LABEL } from './PromptPresets';
@@ -31,6 +32,11 @@ vi.mock('@/hooks/usePromptLimit', async () => {
 vi.mock('@clerk/nextjs', () => ({
   SignInButton: ({ children }: { children: ReactNode }) => children,
 }));
+
+const router = vi.hoisted(() => ({ refresh: vi.fn() }));
+
+// The app router is not mounted here; the generator only asks it to refresh after a card.
+vi.mock('next/navigation', () => ({ useRouter: () => router }));
 
 vi.mock('@/core/widgets/promptDate', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/core/widgets/promptDate')>()),
@@ -91,6 +97,74 @@ const clickGenerate = () => fireEvent.click(screen.getByRole('button', { name: '
 describe('WidgetGenerator', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    router.refresh.mockClear();
+  });
+
+  it('refreshes the Server Components once a card has finished, not while it streams', async () => {
+    // Arrange
+    const json = responseJson(buildTaskList({ tasks: buildTasks(3) }));
+    const stream = controlledResponse();
+    mockFetch(stream.response);
+    render(<WidgetGenerator />);
+    typePrompt(faker.lorem.sentence());
+    clickGenerate();
+
+    // Act
+    stream.push(cutInsideFirstTask(json));
+
+    // Assert
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument());
+    expect(router.refresh).not.toHaveBeenCalled();
+
+    // Act
+    stream.push(json.slice(cutInsideFirstTask(json).length));
+    stream.close();
+
+    // Assert
+    expect(await screen.findByRole('button', { name: 'Generate' })).toBeInTheDocument();
+    expect(router.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not refresh when the stream is cut off mid-card', async () => {
+    // Arrange
+    const json = responseJson(buildTaskList({ tasks: buildTasks(3) }));
+    const stream = controlledResponse();
+    mockFetch(stream.response);
+    render(<WidgetGenerator />);
+    typePrompt(faker.lorem.sentence());
+    clickGenerate();
+
+    // Act
+    stream.push(cutInsideFirstTask(json));
+    stream.close();
+
+    // Assert
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(router.refresh).not.toHaveBeenCalled();
+  });
+
+  it('shows the start slot on the start screen only, and again after New', async () => {
+    // Arrange
+    const savedText = faker.lorem.sentence();
+    const stream = controlledResponse();
+    mockFetch(stream.response);
+    render(<WidgetGenerator start={<p>{savedText}</p>} />);
+    expect(screen.getByText(savedText)).toBeInTheDocument();
+    typePrompt(faker.lorem.sentence());
+
+    // Act
+    clickGenerate();
+
+    // Assert
+    expect(await screen.findByRole('button', { name: NEW_CARD_LABEL })).toBeInTheDocument();
+    expect(screen.queryByText(savedText)).toBeNull();
+
+    // Act
+    fireEvent.click(screen.getByRole('button', { name: NEW_CARD_LABEL }));
+
+    // Assert
+    expect(await screen.findByText(savedText)).toBeInTheDocument();
+    stream.close();
   });
 
   it("posts the prompt with the user's time zone to the generate endpoint", async () => {
@@ -238,6 +312,49 @@ describe('WidgetGenerator', () => {
       stream.close();
     },
   );
+
+  it('replaces the examples with the start slot, which can bring them back', async () => {
+    // Arrange
+    const [{ examplePrompt }] = WIDGETS;
+    const stream = controlledResponse();
+    const fetchMock = mockFetch(stream.response);
+    const { rerender } = render(<WidgetGenerator start={<p>{faker.lorem.sentence()}</p>} />);
+    expect(screen.queryByRole('group', { name: PRESETS_LABEL })).toBeNull();
+
+    // Act: a slot from a Server Component falls back to the examples, wired to this generator.
+    rerender(
+      <WidgetGenerator
+        start={
+          <section>
+            <GeneratorPresets />
+          </section>
+        }
+      />,
+    );
+    const presets = screen.getByRole('group', { name: PRESETS_LABEL });
+    fireEvent.click(within(presets).getByRole('button', { name: examplePrompt }));
+
+    // Assert
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({ prompt: examplePrompt });
+    stream.close();
+  });
+
+  it.each([
+    [undefined, true],
+    ['centered', true],
+    ['top', false],
+  ] as const)('with layout %s, centers the start screen: %s', (layout, centered) => {
+    // Act
+    const { container } = render(<WidgetGenerator layout={layout} />);
+
+    // Assert
+    const root = container.firstElementChild;
+    expect(root?.classList.contains('justify-center')).toBe(centered);
+    // At the top, the field gets extra room under the navbar instead.
+    expect(root?.classList.contains('pt-24')).toBe(!centered);
+  });
 
   it('clears the field on send and switches to the next-card placeholder', async () => {
     // Arrange

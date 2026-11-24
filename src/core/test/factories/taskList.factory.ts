@@ -8,6 +8,7 @@ import {
   type Task,
   type TaskList,
 } from '../../widgets/taskList.schema';
+import type { TaskView } from '../../widgets/taskList.view';
 
 const ISO_DATE_LENGTH = 'YYYY-MM-DD'.length;
 
@@ -30,3 +31,12 @@ export const buildTaskList = (overrides: Partial<TaskList> = {}): TaskList => ({
   tasks: buildTasks(faker.number.int({ min: MIN_TASKS, max: MAX_TASKS })),
   ...overrides,
 });
+
+/** A saved task as the client sees it: a database id and every field complete. */
+export const buildTaskView = (overrides: Partial<TaskView> = {}): TaskView => {
+  const { title, done, priority, due } = buildTask();
+  return { id: faker.string.uuid(), title, done, priority, due, ...overrides };
+};
+
+export const buildTaskViews = (count: number, overrides: Partial<TaskView> = {}): TaskView[] =>
+  Array.from({ length: count }, () => buildTaskView(overrides));
