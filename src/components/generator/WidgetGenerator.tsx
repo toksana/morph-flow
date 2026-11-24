@@ -7,6 +7,7 @@ import { usePromptLimit } from '@/hooks/usePromptLimit';
 import { cn } from '@/lib/utils';
 
 import { GeneratorPresets, PresetsContext } from './GeneratorPresets';
+import { COLUMN_CLASS } from './layoutClasses';
 import { NewCardButton } from './NewCardButton';
 import { PromptForm } from './PromptForm';
 import { RateLimitNotice } from './RateLimitNotice';
@@ -38,7 +39,8 @@ interface WidgetGeneratorProps {
   intro?: ReactNode;
   /**
    * Start-screen content under the field, hidden on the canvas like the intro. The examples by
-   * default; a slot may render them itself through <GeneratorPresets />.
+   * default; a slot may render them itself through <GeneratorPresets />. It gets the page's full
+   * width, wider than the field's column, and sets its own (see StartCards).
    */
   start?: ReactNode;
   layout?: StartLayout;
@@ -66,9 +68,9 @@ export const WidgetGenerator = ({
         !isOnCanvas && layout === 'top' && TOP_LAYOUT_ROOM_CLASS,
       )}
     >
-      {!isOnCanvas && intro}
+      {!isOnCanvas && intro !== undefined && <div className={COLUMN_CLASS}>{intro}</div>}
       {isOnCanvas && (
-        <section className="flex flex-col gap-4">
+        <section className={cn(COLUMN_CLASS, 'flex flex-col gap-4')}>
           {stream.hasError &&
             (stream.retryInMinutes === null ? (
               <p role="alert" className="text-sm text-destructive">
@@ -83,7 +85,7 @@ export const WidgetGenerator = ({
         </section>
       )}
       <ViewTransition name="command-input">
-        <div className={cn(isOnCanvas && DOCK_CLASS)}>
+        <div className={isOnCanvas ? DOCK_CLASS : COLUMN_CLASS}>
           <PromptForm
             value={prompt}
             placeholder={isOnCanvas ? NEXT_PLACEHOLDER : START_PLACEHOLDER}
