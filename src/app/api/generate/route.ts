@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 
 import { getDb } from '@/server/db/client';
+import { createHabit } from '@/server/db/habits';
 import { upsertTasks } from '@/server/db/tasks';
 import { upsertUser } from '@/server/db/users';
 import { createGenerateHandler } from '@/server/generate/generateHandler';
@@ -18,6 +19,9 @@ export const POST = createGenerateHandler({
   saveUser: async (identity) => upsertUser(getDb(), identity),
   saveTasks: async (userId, tasks) => {
     await upsertTasks(getDb(), userId, tasks);
+  },
+  saveHabit: async (userId, habit) => {
+    await createHabit(getDb(), userId, habit);
   },
   checkRateLimit: checkRateLimit ?? undefined,
 });

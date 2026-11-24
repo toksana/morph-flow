@@ -13,11 +13,15 @@ const promptDateParts = (now: Date, timeZone: string): Record<string, string> =>
       .map((part) => [part.type, part.value]),
   );
 
-/** Today's date in the user's time zone, e.g. "Thursday, 2026-11-19", for resolving "tomorrow". */
-export const formatPromptDate = (now: Date, timeZone: string): string => {
-  const { weekday, year, month, day } = promptDateParts(now, timeZone);
-  return `${weekday}, ${year}-${month}-${day}`;
+/** The calendar day in the user's time zone as an ISO date, e.g. "2026-11-19": their "today". */
+export const localDay = (now: Date, timeZone: string): string => {
+  const { year, month, day } = promptDateParts(now, timeZone);
+  return `${year}-${month}-${day}`;
 };
+
+/** Today's date in the user's time zone, e.g. "Thursday, 2026-11-19", for resolving "tomorrow". */
+export const formatPromptDate = (now: Date, timeZone: string): string =>
+  `${promptDateParts(now, timeZone).weekday}, ${localDay(now, timeZone)}`;
 
 /** True for IANA zones the runtime knows, e.g. "Europe/Berlin"; false for anything else. */
 export const isValidTimeZone = (timeZone: string): boolean => {

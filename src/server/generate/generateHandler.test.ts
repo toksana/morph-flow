@@ -5,6 +5,8 @@ import { buildHabitStreakCard } from '@/core/test/factories/habitStreakCard.fact
 import { buildTaskList } from '@/core/test/factories/taskList.factory';
 import { GUEST_PROMPT_LIMIT, USER_PROMPT_LIMIT } from '@/core/constants';
 import { widgetResponseSchema } from '@/core/widgets/widget.schema';
+import { localDay } from '@/core/widgets/promptDate';
+import { toGeneratedHabit } from '@/server/db/habitValues';
 import { generatedTaskValues } from '@/server/db/taskValues';
 import type { CheckRateLimit } from '@/server/rateLimit/caller';
 
@@ -314,12 +316,18 @@ describe('createGenerateHandler', () => {
       expect(saveTasks).not.toHaveBeenCalled();
     });
 
-    it('saves nothing for a widget without a table yet', async () => {
+    it("saves a signed-in user's finished habit under their users.id, dated in their zone", async () => {
       // Arrange
+      const userId = faker.string.uuid();
+      const now = faker.date.recent();
+      const widget = buildHabitStreakCard();
       const saveTasks = vi.fn(async () => undefined);
-      const handler = signedInHandler(buildHabitStreakCard(), {
-        saveUser: async () => faker.string.uuid(),
+      const saveHabit = vi.fn(async () => undefined);
+      const handler = signedInHandler(widget, {
+        now: () => now,
+        saveUser: async () => userId,
         saveTasks,
+        saveHabit,
       });
 
       // Act
@@ -327,18 +335,25 @@ describe('createGenerateHandler', () => {
       await response.text();
 
       // Assert
+      expect(saveHabit).toHaveBeenCalledExactlyOnceWith(
+        userId,
+        toGeneratedHabit(widget, localDay(now, TIME_ZONE)),
+      );
       expect(saveTasks).not.toHaveBeenCalled();
     });
 
-    it('saves no tasks when saving the user failed, since there is no owner id', async () => {
+    it('saves no card when saving the user failed, since there is no owner id', async () => {
       // Arrange
       vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const saveTasks = vi.fn(async () => undefined);
-      const handler = signedInHandler(buildTaskList(), {
+      const saveHabit = vi.fn(async () => undefined);
+      const widget = faker.helpers.arrayElement([buildTaskList, buildHabitStreakCard])();
+      const handler = signedInHandler(widget, {
         saveUser: async () => {
           throw new Error(faker.lorem.sentence());
         },
         saveTasks,
+        saveHabit,
       });
 
       // Act
@@ -347,6 +362,7 @@ describe('createGenerateHandler', () => {
 
       // Assert
       expect(saveTasks).not.toHaveBeenCalled();
+      expect(saveHabit).not.toHaveBeenCalled();
     });
 
     it('still streams the whole card when saving it fails, and logs why', async () => {

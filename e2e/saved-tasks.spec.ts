@@ -5,6 +5,7 @@ import { buildTasks } from '../src/core/test/factories/taskList.factory';
 import type { Task } from '../src/core/widgets/taskList.schema';
 
 import { blockClerkProtect } from './support/blockClerkProtect';
+import { deleteSavedHabits } from './support/savedHabitsDb';
 import { deleteSavedTasks, seedSavedTasks } from './support/savedTasksDb';
 import { TEST_USER_EMAIL, ensureTestUser } from './support/testUser';
 
@@ -38,8 +39,10 @@ test.afterAll(async () => {
 const tiedTasks = (count: number, done: boolean): Task[] =>
   buildTasks(count).map((task) => ({ ...task, done, due: undefined, priority: 'medium' }));
 
+/** Exactly these tasks and no habits, so only the tasks card can show. */
 const seed = async (tasks: Task[]): Promise<void> => {
   userId = await seedSavedTasks(clerkUserId, tasks);
+  await deleteSavedHabits(userId);
 };
 
 /** Signs in, then loads the start screen again so the Server Component reads the session. */

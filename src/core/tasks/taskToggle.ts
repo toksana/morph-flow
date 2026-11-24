@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import type { SaveResult } from '../saveResult';
 import type { TaskView } from '../widgets/taskList.view';
 
 /** What the client sends to tick a saved task off or open it again. */
@@ -10,10 +11,7 @@ export const toggleTaskRequestSchema = z.object({
 
 export type ToggleTaskRequest = z.infer<typeof toggleTaskRequestSchema>;
 
-/** Why a toggle was not saved; the client only shows a generic message for any of them. */
-export type ToggleTaskError = 'invalid' | 'unauthorized' | 'not_found' | 'failed';
-
-export type ToggleTaskResult = { ok: true } | { ok: false; error: ToggleTaskError };
+export type ToggleTaskResult = SaveResult;
 
 /**
  * The list with one task's `done` set, everything else as it was: the optimistic update, so the

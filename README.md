@@ -12,10 +12,10 @@ fills in live while the model is still writing it.
 >
 > **Works now:** a TaskList or HabitStreakCard from one prompt, streaming in live; optional
 > sign-in with Clerk; hourly generation limits for guests and signed-in users; a signed-in
-> user's generated tasks are saved to Postgres and listed on the start screen, where they can
-> be ticked off.
+> user's generated tasks and habits are saved to Postgres and listed on the start screen, where
+> tasks can be ticked off and habits checked in for the day.
 >
-> **Next:** editing and deleting saved tasks, saving habits, keeping a guest's cards in the
+> **Next:** editing and deleting saved tasks and habits, keeping a guest's cards in the
 > browser, then more widget types. Before a wider launch: a Clerk production instance on our own
 > domain (the demo runs on development keys) and the database migrations in production.
 
@@ -27,7 +27,8 @@ The model picks one of these from the prompt:
   dates and priorities, streamed in row by row. Signed in, the tasks are saved and show up under
   **Your tasks** on the start screen.
 - **HabitStreakCard:** _"Drink 2 liters of water every day for a month"_ → a streak toward a goal,
-  with a check-in button that works as soon as the card is complete.
+  with a check-in button that works as soon as the card is complete. Signed in, the habit is saved
+  and shows up under **Habits** on the start screen.
 
 ![A habit card for drinking water streams in, then the check-in button marks today as done](docs/demo-habits.gif)
 
@@ -60,8 +61,8 @@ sequenceDiagram
   API->>LLM: streamText + Output.object(widget union schema), system prompt for the user's "today"
   LLM-->>API: JSON tokens
   API-->>UI: text stream of partial JSON
-  opt signed in, finished TaskList (onEnd)
-    API->>DB: upsert tasks in the card's order (a failure is logged)
+  opt signed in, finished card (onEnd)
+    API->>DB: a TaskList's tasks in the card's order, or a habit with today's check-in if done (a failure is logged)
   end
   API-->>UI: end of stream, after the save settles
   UI->>UI: parse partial JSON → WidgetRenderer switches on widget.type
@@ -79,12 +80,14 @@ sequenceDiagram
   Redis is down, the request goes through and the prompt limit still caps its cost.
 - **Errors stay on the server.** The client shows a generic message. Details go to the server log.
 
-### Saved tasks
+### Saved tasks and habits
 
 A guest's start screen pitches the app: hero, centered field, examples. A signed-in user already
-knows it, so they get the name in the navbar, the field at the top and their saved tasks right
-below it, on the first screen. Until they have any, the examples take that place. Ticking a task
-off shows at once and is saved in the background:
+knows it, so they get the name in the navbar, the field at the top and their saved cards right
+below it, on the first screen: **Your tasks** and **Habits**, each only when it has something in
+it. On a phone they stack, tasks first; from 768px they sit side by side. A lone card keeps the
+field's width. Until there is anything saved, the examples take that place. Ticking a task off
+shows at once and is saved in the background:
 
 ```mermaid
 sequenceDiagram
@@ -110,8 +113,37 @@ sequenceDiagram
 - **Rows don't jump.** Each view keeps its rows from when it opened, so a ticked task stays in
   place, struck through, until the next visit.
 - **New cards land there too.** When a card finishes streaming, the client refreshes the Server
-  Components. The server saved the tasks before the stream ended, so after **New** they are in
-  the list with their database ids. The streamed card itself stays read-only.
+  Components. The server saved the tasks or the habit before the stream ended, so after **New**
+  they are on the start screen with their database ids. The streamed card itself is not saved
+  again: a TaskList stays read-only, a habit's check-in there stays local.
+
+Habits work the same way, with one tap per day: the round button fills emerald, and the streak
+and the `done/total` counter move at once. The streak is never stored; it is counted from a log
+of check-ins:
+
+```mermaid
+sequenceDiagram
+  participant UI as Browser
+  participant SA as Server Action checkInHabitAction
+  participant DB as Neon Postgres
+
+  UI->>UI: tap: useOptimistic fills the button, streak +1
+  UI->>SA: { habitId, done }
+  SA->>SA: validate with Zod, check the session
+  SA->>DB: find the user → their time zone → today ("2026-11-24")
+  SA->>DB: one transaction: the caller's live habit? check in (or undo) on today
+  SA-->>UI: ok → refresh(): streaks counted again from the log
+  Note over UI: not saved → the check-in rolls back and an alert says so
+```
+
+- **The user's day.** "Today" is the calendar day in the zone of the user's latest request, so a
+  check-in at 00:30 in Tokyo counts for the Tokyo date, not the server's.
+- **A log, not a counter.** `habit_check_ins` has one row per habit and day. The streak is the run
+  of checked-in days ending today, or yesterday while today is still open; a missed day breaks
+  it to 0. Undo marks the row deleted and checking in again restores it, so repeating either
+  changes nothing.
+- **The model's head start.** A generated _"I've run 12 days in a row"_ keeps its 12: they are
+  stored as the habit's `streak_base` and count for as long as the streak is unbroken.
 
 ## Stack
 
@@ -179,17 +211,21 @@ src/
                a shared package for a React Native app later.
   server/      The generate handler and the streaming call to the model.
     tasks/     Loading saved tasks and toggling one, with Clerk and the database injected.
-    db/        Drizzle schema, Neon client, users and tasks repositories. Migrations live
-               in /drizzle.
+    habits/    Loading saved habits with their streaks, and checking one in for today.
+    db/        Drizzle schema, Neon client, users, tasks and habits repositories. Migrations
+               live in /drizzle.
     rateLimit/ Upstash sliding-window limiter, keyed by Clerk user id or client IP.
   proxy.ts     Clerk middleware: attaches the session, keeps every route public.
   app/         Next.js routes: the page and /api/generate. actions/ holds the Server Actions,
-               _tasks/ the "Your tasks" Server Component and its Clerk/Neon wiring.
+               _tasks/ the saved-cards Server Component and its Clerk/Neon wiring.
   hooks/       useWidgetStream (useObject wrapper), useGeneratorSession (field, stream,
-               start screen ↔ canvas), and the saved list's optimistic tick and expansion.
+               start screen ↔ canvas), and the saved cards' optimistic tick, check-in and
+               expansion.
   components/
     generator/ Prompt field, example presets, and WidgetRenderer.
     savedTasks/ The "Your tasks" card: rows, Show all, the save-failed alert.
+    savedHabits/ The "Habits" card: streak badges and one-tap check-ins.
+    savedCards/ The start screen's layout of those cards: one column or a pair.
     widgets/   One folder per widget, plus shared accents and the header icon tile.
     landing/   The hero on the start screen.
     ui/        shadcn/ui primitives.
@@ -224,9 +260,10 @@ the browser at a local mock that streams the response chunk by chunk, so it chec
 building up, finishing, and being dropped by **New** without calling the model. The first run
 needs a browser: `pnpm exec playwright install chromium`.
 
-The saved-tasks specs sign in for real with `@clerk/testing`: a test user (see
+The saved-tasks and saved-habits specs sign in for real with `@clerk/testing`: a test user (see
 `E2E_CLERK_USER_EMAIL`) is created once in the Clerk dev instance and signed in with a
-server-side token. They need the Clerk keys and `.env.development.local`: the run takes
+server-side token. The habits spec has a second user (the same address tagged `+habits`), since
+spec files run in parallel and each one replaces its user's saved cards. They need the Clerk keys and `.env.development.local`: the run takes
 `DATABASE_URL` from there only, for the tests and for the app under test, so it can only reach
 the Neon dev branch. Clerk Protect requests are blocked in the tests, since its probes never let
 the page go idle.
