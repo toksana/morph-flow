@@ -1,3 +1,4 @@
+import { useRouter } from 'next/navigation';
 import { startTransition, useRef, useState } from 'react';
 
 import { type WidgetStream, useWidgetStream } from './useWidgetStream';
@@ -21,7 +22,11 @@ export const useGeneratorSession = (): GeneratorSession => {
   // A failed request hands the text back so it can be sent again; text typed since then wins.
   const restoreSentPrompt = (): void =>
     setPrompt((current) => (current === '' ? sentPromptRef.current : current));
-  const stream = useWidgetStream({ onError: restoreSentPrompt });
+  // The server saves a signed-in user's finished card before the stream ends, so a refresh now
+  // re-renders the Server Components with it: "Your tasks" holds it by the time the user is back
+  // on the start screen. For a guest the saved list renders nothing, so the refresh is cheap.
+  const router = useRouter();
+  const stream = useWidgetStream({ onError: restoreSentPrompt, onFinish: () => router.refresh() });
 
   // A transition, so <ViewTransition> animates the layout change; regular updates would not.
   const showCanvas = (visible: boolean): void => startTransition(() => setIsOnCanvas(visible));

@@ -32,6 +32,11 @@ vi.mock('@clerk/nextjs', () => ({
   SignInButton: ({ children }: { children: ReactNode }) => children,
 }));
 
+const router = vi.hoisted(() => ({ refresh: vi.fn() }));
+
+// The app router is not mounted here; the generator only asks it to refresh after a card.
+vi.mock('next/navigation', () => ({ useRouter: () => router }));
+
 vi.mock('@/core/widgets/promptDate', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/core/widgets/promptDate')>()),
   currentTimeZone: () => USER_TIME_ZONE,
@@ -91,6 +96,74 @@ const clickGenerate = () => fireEvent.click(screen.getByRole('button', { name: '
 describe('WidgetGenerator', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    router.refresh.mockClear();
+  });
+
+  it('refreshes the Server Components once a card has finished, not while it streams', async () => {
+    // Arrange
+    const json = responseJson(buildTaskList({ tasks: buildTasks(3) }));
+    const stream = controlledResponse();
+    mockFetch(stream.response);
+    render(<WidgetGenerator />);
+    typePrompt(faker.lorem.sentence());
+    clickGenerate();
+
+    // Act
+    stream.push(cutInsideFirstTask(json));
+
+    // Assert
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument());
+    expect(router.refresh).not.toHaveBeenCalled();
+
+    // Act
+    stream.push(json.slice(cutInsideFirstTask(json).length));
+    stream.close();
+
+    // Assert
+    expect(await screen.findByRole('button', { name: 'Generate' })).toBeInTheDocument();
+    expect(router.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not refresh when the stream is cut off mid-card', async () => {
+    // Arrange
+    const json = responseJson(buildTaskList({ tasks: buildTasks(3) }));
+    const stream = controlledResponse();
+    mockFetch(stream.response);
+    render(<WidgetGenerator />);
+    typePrompt(faker.lorem.sentence());
+    clickGenerate();
+
+    // Act
+    stream.push(cutInsideFirstTask(json));
+    stream.close();
+
+    // Assert
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(router.refresh).not.toHaveBeenCalled();
+  });
+
+  it('shows the saved tasks on the start screen only, and again after New', async () => {
+    // Arrange
+    const savedText = faker.lorem.sentence();
+    const stream = controlledResponse();
+    mockFetch(stream.response);
+    render(<WidgetGenerator saved={<p>{savedText}</p>} />);
+    expect(screen.getByText(savedText)).toBeInTheDocument();
+    typePrompt(faker.lorem.sentence());
+
+    // Act
+    clickGenerate();
+
+    // Assert
+    expect(await screen.findByRole('button', { name: NEW_CARD_LABEL })).toBeInTheDocument();
+    expect(screen.queryByText(savedText)).toBeNull();
+
+    // Act
+    fireEvent.click(screen.getByRole('button', { name: NEW_CARD_LABEL }));
+
+    // Assert
+    expect(await screen.findByText(savedText)).toBeInTheDocument();
+    stream.close();
   });
 
   it("posts the prompt with the user's time zone to the generate endpoint", async () => {

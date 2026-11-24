@@ -31,6 +31,8 @@ export interface WidgetStream {
 interface WidgetStreamOptions {
   /** Called when a request fails (not when it is stopped). */
   onError?: () => void;
+  /** Called when a stream ends with a complete widget. */
+  onFinish?: () => void;
 }
 
 /**
@@ -38,7 +40,7 @@ interface WidgetStreamOptions {
  * A stream that ends with a half-written widget (status 200, JSON cut off) counts as a failure:
  * `useObject` only reports it through `onFinish`, so it is tracked here.
  */
-export const useWidgetStream = ({ onError }: WidgetStreamOptions = {}): WidgetStream => {
+export const useWidgetStream = ({ onError, onFinish }: WidgetStreamOptions = {}): WidgetStream => {
   const [isIncomplete, setIsIncomplete] = useState(false);
   const [retryInMinutes, setRetryInMinutes] = useState<number | null>(null);
   const { object, submit, stop, clear, isLoading, error } = useObject<
@@ -55,7 +57,10 @@ export const useWidgetStream = ({ onError }: WidgetStreamOptions = {}): WidgetSt
       onError?.();
     },
     onFinish: ({ error: invalid }) => {
-      if (invalid === undefined) return;
+      if (invalid === undefined) {
+        onFinish?.();
+        return;
+      }
       setIsIncomplete(true);
       onError?.();
     },
