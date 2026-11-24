@@ -1,22 +1,14 @@
 import { Suspense } from 'react';
 
-import { WidgetGenerator } from '@/components/generator/WidgetGenerator';
-import { Hero } from '@/components/landing/Hero';
-
-import { SavedTasks } from './_tasks/SavedTasks';
+import { StartScreen } from './_tasks/StartScreen';
 
 export default function Home() {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col px-4">
-      <WidgetGenerator
-        intro={<Hero />}
-        // Session and database are request data: Cache Components need them inside Suspense.
-        saved={
-          <Suspense fallback={null}>
-            <SavedTasks />
-          </Suspense>
-        }
-      />
+      {/* The layout depends on the session, which is request data: Cache Components need it inside Suspense. */}
+      <Suspense fallback={null}>
+        <StartScreen />
+      </Suspense>
     </main>
   );
 }

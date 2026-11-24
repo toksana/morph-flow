@@ -9,6 +9,9 @@ import { deleteSavedTasks, seedSavedTasks } from './support/savedTasksDb';
 import { TEST_USER_EMAIL, ensureTestUser } from './support/testUser';
 
 const SAVED_TASKS_TITLE = 'Your tasks';
+const BRAND = 'Morph Flow';
+const PRESETS = 'Or try an example';
+const HERO_HEADING = /Zero-UI task and habit planner/;
 const SHOW_LESS = 'Show less';
 const showAll = (count: number): string => `Show all (${count})`;
 
@@ -68,6 +71,32 @@ const toggleAndSave = async (page: Page, card: Locator, title: string): Promise<
   await card.getByRole('checkbox', { name: title }).click();
   await saved;
 };
+
+test('a signed-in user gets the navbar brand, the field and their tasks, no pitch', async ({
+  page,
+}) => {
+  await seed(tiedTasks(PHONE_ROWS, false));
+
+  const card = await openSignedIn(page);
+
+  await expect(page.getByRole('banner').getByText(BRAND)).toBeVisible();
+  await expect(page.getByRole('heading', { name: HERO_HEADING })).toHaveCount(0);
+  await expect(page.getByRole('group', { name: PRESETS })).toHaveCount(0);
+  await expect(card).toBeVisible();
+  // The card starts on the first screen, right under the field, on a phone too.
+  await page.setViewportSize(PHONE_VIEWPORT);
+  await expect(card).toBeInViewport();
+});
+
+test('a signed-in user with no saved tasks yet gets the examples instead', async ({ page }) => {
+  await seed([]);
+
+  await openSignedIn(page);
+
+  await expect(page.getByRole('group', { name: PRESETS })).toBeVisible();
+  await expect(page.getByRole('heading', { name: HERO_HEADING })).toHaveCount(0);
+  await expect(page.getByText(SAVED_TASKS_TITLE)).toHaveCount(0);
+});
 
 test('ticks a saved task at once and keeps it ticked after a reload', async ({ page }) => {
   const tasks = tiedTasks(PHONE_ROWS, false);

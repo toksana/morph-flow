@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import { Suspense } from 'react';
 
 import { AuthControls } from '@/components/auth/AuthControls';
+import { SignedInBrand } from '@/components/auth/SignedInBrand';
 
 import './globals.css';
 
@@ -35,10 +36,13 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       <body className="min-h-full flex flex-col">
         <ClerkProvider>
           {/* Floats over the page so the centred generator layout keeps its full height. */}
-          <header className="absolute top-0 right-0 z-10 flex items-center p-4">
+          <header className="absolute inset-x-0 top-0 z-10 flex items-center justify-between p-4">
             {/* Session is request data: Cache Components need it inside Suspense. */}
             <Suspense>
-              <AuthControls />
+              <SignedInBrand />
+              <div className="ml-auto">
+                <AuthControls />
+              </div>
             </Suspense>
           </header>
           {children}

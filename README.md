@@ -81,8 +81,10 @@ sequenceDiagram
 
 ### Saved tasks
 
-A signed-in user's start screen lists their saved tasks under the examples. Ticking one off
-shows at once and is saved in the background:
+A guest's start screen pitches the app: hero, centered field, examples. A signed-in user already
+knows it, so they get the name in the navbar, the field at the top and their saved tasks right
+below it, on the first screen. Until they have any, the examples take that place. Ticking a task
+off shows at once and is saved in the background:
 
 ```mermaid
 sequenceDiagram
@@ -93,7 +95,7 @@ sequenceDiagram
 
   UI->>RSC: GET / (Clerk session)
   RSC->>DB: find the user, list their live tasks
-  RSC-->>UI: "Your tasks" (nothing for a guest, or if the read fails)
+  RSC-->>UI: "Your tasks" (the examples if there are none yet, or if the read fails)
   UI->>UI: tick: useOptimistic shows it at once
   UI->>SA: { taskId, done }
   SA->>SA: validate with Zod, check the session

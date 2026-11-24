@@ -11,6 +11,7 @@ import { TOO_MANY_REQUESTS_ERROR } from '@/core/widgets/rateLimit';
 import { WIDGETS } from '@/core/widgets/widget.schema';
 import { CHECK_IN_TEXT, UNDO_TEXT } from '@/components/widgets/habitStreakCard/CheckInButton';
 
+import { GeneratorPresets } from './GeneratorPresets';
 import { NEW_CARD_LABEL } from './NewCardButton';
 import { PROMPT_LABEL } from './PromptForm';
 import { PRESETS_LABEL } from './PromptPresets';
@@ -142,12 +143,12 @@ describe('WidgetGenerator', () => {
     expect(router.refresh).not.toHaveBeenCalled();
   });
 
-  it('shows the saved tasks on the start screen only, and again after New', async () => {
+  it('shows the start slot on the start screen only, and again after New', async () => {
     // Arrange
     const savedText = faker.lorem.sentence();
     const stream = controlledResponse();
     mockFetch(stream.response);
-    render(<WidgetGenerator saved={<p>{savedText}</p>} />);
+    render(<WidgetGenerator start={<p>{savedText}</p>} />);
     expect(screen.getByText(savedText)).toBeInTheDocument();
     typePrompt(faker.lorem.sentence());
 
@@ -311,6 +312,49 @@ describe('WidgetGenerator', () => {
       stream.close();
     },
   );
+
+  it('replaces the examples with the start slot, which can bring them back', async () => {
+    // Arrange
+    const [{ examplePrompt }] = WIDGETS;
+    const stream = controlledResponse();
+    const fetchMock = mockFetch(stream.response);
+    const { rerender } = render(<WidgetGenerator start={<p>{faker.lorem.sentence()}</p>} />);
+    expect(screen.queryByRole('group', { name: PRESETS_LABEL })).toBeNull();
+
+    // Act: a slot from a Server Component falls back to the examples, wired to this generator.
+    rerender(
+      <WidgetGenerator
+        start={
+          <section>
+            <GeneratorPresets />
+          </section>
+        }
+      />,
+    );
+    const presets = screen.getByRole('group', { name: PRESETS_LABEL });
+    fireEvent.click(within(presets).getByRole('button', { name: examplePrompt }));
+
+    // Assert
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({ prompt: examplePrompt });
+    stream.close();
+  });
+
+  it.each([
+    [undefined, true],
+    ['centered', true],
+    ['top', false],
+  ] as const)('with layout %s, centers the start screen: %s', (layout, centered) => {
+    // Act
+    const { container } = render(<WidgetGenerator layout={layout} />);
+
+    // Assert
+    const root = container.firstElementChild;
+    expect(root?.classList.contains('justify-center')).toBe(centered);
+    // At the top, the field gets extra room under the navbar instead.
+    expect(root?.classList.contains('pt-24')).toBe(!centered);
+  });
 
   it('clears the field on send and switches to the next-card placeholder', async () => {
     // Arrange
