@@ -1,10 +1,16 @@
 import { faker } from '@faker-js/faker';
 import { describe, expect, it } from 'vitest';
 
-import { buildTask, buildTaskList, buildTasks } from '../test/factories/taskList.factory';
+import {
+  buildTask,
+  buildTaskList,
+  buildTaskViews,
+  buildTasks,
+} from '../test/factories/taskList.factory';
 
 import { MAX_TASKS, TASK_PRIORITIES } from './taskList.schema';
-import { completeDueDate, completePriority, toTaskListView } from './taskList.view';
+import { completeDueDate, completePriority, summarizeTasks, toTaskListView } from './taskList.view';
+import { completionPercent } from './viewUtils';
 
 const RANDOM_RUNS = 50;
 const ISO_DATE_LENGTH = 'YYYY-MM-DD'.length;
@@ -218,5 +224,28 @@ describe('toTaskListView', () => {
 
     // Assert
     expect(view.completionPercent).toBe(expected);
+  });
+});
+
+describe('summarizeTasks', () => {
+  it('counts done tasks and keeps the given title and order, for random lists', () => {
+    Array.from({ length: RANDOM_RUNS }).forEach(() => {
+      // Arrange
+      const title = faker.lorem.words(2);
+      const tasks = buildTaskViews(faker.number.int({ min: 0, max: MAX_TASKS }));
+      const doneCount = tasks.filter((task) => task.done).length;
+
+      // Act
+      const view = summarizeTasks(title, tasks);
+
+      // Assert
+      expect(view).toEqual({
+        title,
+        tasks,
+        doneCount,
+        totalCount: tasks.length,
+        completionPercent: completionPercent(doneCount, tasks.length),
+      });
+    });
   });
 });

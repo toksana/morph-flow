@@ -10,9 +10,9 @@ import { completionPercent, nonBlank } from './viewUtils';
 
 export interface TaskView {
   /**
-   * Identity within one generation, derived from the task's position in the streamed array.
-   * Streamed JSON arrays only grow at the end, so a position never changes mid-stream.
-   * Persistent ids are assigned by code when tasks are saved, never by the model.
+   * While streaming: identity within one generation, derived from the task's position in the
+   * streamed array (JSON arrays only grow at the end, so a position never changes mid-stream).
+   * For a saved task: its database id. Ids are assigned by code, never by the model.
    */
   id: string;
   title: string;
@@ -53,17 +53,20 @@ const toTaskView = (task: DeepPartial<Task> | undefined, index: number): TaskVie
   };
 };
 
-export const toTaskListView = (partial: DeepPartial<TaskList> | undefined): TaskListView => {
-  const tasks = (partial?.tasks ?? [])
-    .map(toTaskView)
-    .filter((task): task is TaskView => task !== null);
+/** A list view over tasks that are already complete views: counts and percent follow `done`. */
+export const summarizeTasks = (title: string, tasks: TaskView[]): TaskListView => {
   const doneCount = tasks.filter((task) => task.done).length;
-
   return {
-    title: nonBlank(partial?.title) ?? '',
+    title,
     tasks,
     doneCount,
     totalCount: tasks.length,
     completionPercent: completionPercent(doneCount, tasks.length),
   };
 };
+
+export const toTaskListView = (partial: DeepPartial<TaskList> | undefined): TaskListView =>
+  summarizeTasks(
+    nonBlank(partial?.title) ?? '',
+    (partial?.tasks ?? []).map(toTaskView).filter((task): task is TaskView => task !== null),
+  );
