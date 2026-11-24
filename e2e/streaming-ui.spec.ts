@@ -3,6 +3,7 @@ import { expect, type Page, test } from '@playwright/test';
 import { buildTaskList, buildTasks } from '../src/core/test/factories/taskList.factory';
 import { buildHabitStreakCard } from '../src/core/test/factories/habitStreakCard.factory';
 
+import { blockClerkProtect } from './support/blockClerkProtect';
 import { type MockStreamServer, startMockStreamServer } from './support/mockStreamServer';
 
 const TASK_COUNT = 3;
@@ -21,6 +22,7 @@ const START_HEADING = /Zero-UI task and habit planner/;
 let mock: MockStreamServer;
 
 test.beforeEach(async ({ page }) => {
+  await blockClerkProtect(page);
   mock = await startMockStreamServer();
   // The app still posts to /api/generate; the browser is sent on to the mock that streams by hand.
   await page.route('**/api/generate', (route) =>
