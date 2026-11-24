@@ -18,6 +18,7 @@ import {
   clientIp,
 } from '@/server/rateLimit/caller';
 
+import { createLogError } from '../logError';
 import { streamWidget } from './streamWidget';
 
 const INVALID_REQUEST_STATUS = 400;
@@ -51,13 +52,7 @@ const readJson = async (request: Request): Promise<unknown> => {
   }
 };
 
-const logError = (scope: string, error: unknown): void => {
-  if (error instanceof Error) {
-    console.error(`[generate] ${scope}:`, error.message);
-    return;
-  }
-  console.error(`[generate] ${scope} with a non-Error value:`, error);
-};
+const logError = createLogError('generate');
 
 const logStreamError = (error: unknown): void => logError('stream failed', error);
 
