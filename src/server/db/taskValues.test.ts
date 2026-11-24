@@ -65,7 +65,7 @@ describe('generatedTaskValues', () => {
     expect(values).toEqual(taskList.tasks.map((task) => toTaskValues(task, now)));
   });
 
-  it('gives nothing to save for a widget without a table', () => {
+  it('gives no tasks for a widget that is not a TaskList', () => {
     // Act
     const values = generatedTaskValues(buildHabitStreakCard(), faker.date.recent());
 

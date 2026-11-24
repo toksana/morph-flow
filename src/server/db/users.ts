@@ -38,3 +38,21 @@ export const findUserId = async (db: Database, clerkUserId: string): Promise<str
     .where(eq(users.clerkUserId, clerkUserId));
   return user?.id ?? null;
 };
+
+export interface UserRecord {
+  id: string;
+  /** The zone of the user's latest request: defines their "today" for habit check-ins. */
+  timeZone: string;
+}
+
+/**
+ * The user's id and time zone for a Clerk id, without creating a row.
+ * @returns null for a signed-in user who has never generated a card
+ */
+export const findUser = async (db: Database, clerkUserId: string): Promise<UserRecord | null> => {
+  const [user] = await db
+    .select({ id: users.id, timeZone: users.timeZone })
+    .from(users)
+    .where(eq(users.clerkUserId, clerkUserId));
+  return user ?? null;
+};
