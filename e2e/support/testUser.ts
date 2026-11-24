@@ -5,6 +5,11 @@ const CLERK_API_URL = 'https://api.clerk.com/v1';
 const DEFAULT_TEST_USER_EMAIL = 'e2e+clerk_test@example.com';
 
 export const TEST_USER_EMAIL = process.env.E2E_CLERK_USER_EMAIL ?? DEFAULT_TEST_USER_EMAIL;
+/**
+ * A second user for the habits spec: spec files run in parallel, and on a shared user one spec's
+ * seeding would show up in the other's start screen. The `+habits` tag keeps the test address.
+ */
+export const HABITS_TEST_USER_EMAIL = TEST_USER_EMAIL.replace('@', '+habits@');
 
 const userSchema = z.object({ id: z.string() });
 
@@ -19,23 +24,23 @@ const clerkApi = async (path: string, init: RequestInit = {}): Promise<unknown> 
   return response.json();
 };
 
-const findTestUser = async (): Promise<string | null> => {
-  const query = new URLSearchParams({ email_address: TEST_USER_EMAIL });
+const findTestUser = async (email: string): Promise<string | null> => {
+  const query = new URLSearchParams({ email_address: email });
   const [user] = z.array(userSchema).parse(await clerkApi(`/users?${query}`));
   return user?.id ?? null;
 };
 
-const createTestUser = async (): Promise<string> =>
+const createTestUser = async (email: string): Promise<string> =>
   userSchema.parse(
     await clerkApi('/users', {
       method: 'POST',
-      body: JSON.stringify({ email_address: [TEST_USER_EMAIL], skip_password_requirement: true }),
+      body: JSON.stringify({ email_address: [email], skip_password_requirement: true }),
     }),
   ).id;
 
 /**
- * The Clerk id of the e2e user, created on the first run and reused after that. It has no
+ * The Clerk id of an e2e user (the default one unless `email` is given), created on the first run and reused after that. It has no
  * password or MFA: tests sign in with a server-side token (`clerk.signIn({ emailAddress })`).
  */
-export const ensureTestUser = async (): Promise<string> =>
-  (await findTestUser()) ?? createTestUser();
+export const ensureTestUser = async (email = TEST_USER_EMAIL): Promise<string> =>
+  (await findTestUser(email)) ?? createTestUser(email);
