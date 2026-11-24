@@ -16,6 +16,17 @@ export default defineConfig({
           name: 'unit',
           environment: 'node',
           include: ['src/**/*.test.ts'],
+          exclude: ['src/**/*.db.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          // SQL against the Neon dev branch: opt-in with `pnpm test:db`, kept out of `pnpm test`.
+          name: 'db',
+          environment: 'node',
+          include: ['src/**/*.db.test.ts'],
+          setupFiles: ['./src/server/test/useDevDatabase.ts'],
         },
       },
       {

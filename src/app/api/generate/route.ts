@@ -13,6 +13,8 @@ if (checkRateLimit === null) {
 
 export const POST = createGenerateHandler({
   identify: async () => (await auth()).userId,
-  saveUser: (identity) => upsertUser(getDb(), identity),
+  saveUser: async (identity) => {
+    await upsertUser(getDb(), identity);
+  },
   checkRateLimit: checkRateLimit ?? undefined,
 });
